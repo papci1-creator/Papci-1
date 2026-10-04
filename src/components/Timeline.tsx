@@ -1,0 +1,1019 @@
+import React, { useRef, useEffect, useState } from 'react';
+import {
+  Film,
+  Sparkles,
+  Plus,
+  Play,
+  RotateCcw,
+  Clock,
+  Mic,
+  FileCode,
+  Trash2,
+  Copy,
+  Check,
+  Maximize,
+  Volume2,
+  Layers,
+  ChevronRight,
+  CheckSquare,
+  Square,
+  CheckCheck,
+  X,
+  SlidersHorizontal,
+  User,
+  Users,
+  GripVertical,
+  ChevronLeft,
+  Camera,
+} from 'lucide-react';
+import { Scene, TransitionEffect, CharacterProfile } from '../types';
+import { renderCinematicFrame } from '../utils/canvasRenderer';
+import { audioEngine } from '../utils/audioEngine';
+import { VOICE_ACTORS, TRANSITION_EFFECTS } from '../data/presets';
+import { CameraMotionPanel } from './CameraMotionPanel';
+
+interface TimelineProps {
+  scenes: Scene[];
+  currentSceneIndex: number;
+  setCurrentSceneIndex: (idx: number) => void;
+  onUpdateScene: (id: string, updates: Partial<Scene>) => void;
+  onBulkUpdateScenes?: (ids: string[], updates: Partial<Scene>) => void;
+  onRegenerateScene: (id: string) => void;
+  onExtendScene: (id: string) => void;
+  onDeleteScene: (id: string) => void;
+  onBulkDeleteScenes?: (ids: string[]) => void;
+  onReorderScenes?: (reorderedScenes: Scene[]) => void;
+  onAddScene: () => void;
+  onSeekToScene: (scene: Scene) => void;
+  isPlaying: boolean;
+  characters?: CharacterProfile[];
+  onOpenTurnaround?: (char: CharacterProfile) => void;
+}
+
+// Mini Animated Moving Thumbnail Component
+const MovingSceneThumbnail: React.FC<{ scene: Scene; isSelected: boolean }> = ({ scene, isSelected }) => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    let animId: number;
+    let localTime = 0;
+
+    const loop = () => {
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          localTime += 0.04;
+          if (localTime > scene.duration) localTime = 0;
+
+          renderCinematicFrame(ctx, canvas.width, canvas.height, {
+            scene,
+            timeInScene: localTime,
+            aspectRatio: '16:9',
+            showSubtitles: false,
+          });
+        }
+      }
+      animId = requestAnimationFrame(loop);
+    };
+
+    animId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(animId);
+  }, [scene]);
+
+  return (
+    <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-zinc-800 group/thumb bg-black">
+      <canvas ref={canvasRef} width={320} height={180} className="w-full h-full object-cover" />
+
+      {/* Live Moving Badge */}
+      <div className="absolute top-1.5 left-1.5 bg-black/70 backdrop-blur-xs px-1.5 py-0.5 rounded text-[9px] font-mono text-cyan-400 flex items-center gap-1">
+        <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+        MOVING
+      </div>
+
+      <div className="absolute bottom-1.5 right-1.5 bg-black/80 px-1.5 py-0.5 rounded text-[10px] font-mono text-zinc-300">
+        {scene.duration}s
+      </div>
+    </div>
+  );
+};
+
+export const Timeline: React.FC<TimelineProps> = ({
+  scenes,
+  currentSceneIndex,
+  setCurrentSceneIndex,
+  onUpdateScene,
+  onBulkUpdateScenes,
+  onRegenerateScene,
+  onExtendScene,
+  onDeleteScene,
+  onBulkDeleteScenes,
+  onReorderScenes,
+  onAddScene,
+  onSeekToScene,
+  isPlaying,
+  characters = [],
+  onOpenTurnaround,
+}) => {
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [previewingVoiceId, setPreviewingVoiceId] = useState<string | null>(null);
+  const timelineScrollRef = useRef<HTMLDivElement | null>(null);
+
+  // Drag and drop reordering states
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [dropPosition, setDropPosition] = useState<'before' | 'after' | null>(null);
+
+  // Bulk Edit Mode States
+  const [isBulkMode, setIsBulkMode] = useState(false);
+  const [selectedSceneIds, setSelectedSceneIds] = useState<string[]>([]);
+  const [bulkVoiceActor, setBulkVoiceActor] = useState(VOICE_ACTORS[0].category);
+  const [bulkCharacterId, setBulkCharacterId] = useState<string>(characters[0]?.id || '');
+  const [bulkVolume, setBulkVolume] = useState<number>(1.0);
+  const [bulkPitch, setBulkPitch] = useState<number>(1.0);
+  const [bulkRate, setBulkRate] = useState<number>(1.0);
+  const [bulkTransition, setBulkTransition] = useState<TransitionEffect>('Dissolve');
+  const [bulkFeedback, setBulkFeedback] = useState<string | null>(null);
+  const [openTuningIds, setOpenTuningIds] = useState<string[]>([]);
+
+  // Reorder scenes & auto-recalculate continuous chronological timestamps
+  const handleReorder = (fromIndex: number, toIndex: number) => {
+    if (
+      fromIndex === toIndex ||
+      fromIndex < 0 ||
+      toIndex < 0 ||
+      fromIndex >= scenes.length ||
+      toIndex >= scenes.length
+    ) {
+      return;
+    }
+
+    const newScenes = [...scenes];
+    const [moved] = newScenes.splice(fromIndex, 1);
+    newScenes.splice(toIndex, 0, moved);
+
+    // Auto-recalculate seamless continuous start/end timestamps and scene numbering
+    let runningTime = 0;
+    const recalculated = newScenes.map((s, idx) => {
+      const duration = s.duration || 6;
+      const startTime = runningTime;
+      const endTime = runningTime + duration;
+      runningTime = endTime;
+      return {
+        ...s,
+        sceneNumber: idx + 1,
+        startTime,
+        endTime,
+      };
+    });
+
+    if (onReorderScenes) {
+      onReorderScenes(recalculated);
+    }
+
+    // Sync selected scene index and video scrubber
+    setCurrentSceneIndex(toIndex);
+    onSeekToScene(recalculated[toIndex]);
+
+    triggerFeedback(`Moved Scene #${fromIndex + 1} to Position #${toIndex + 1} (Timestamps auto-calculated)`);
+  };
+
+  // Drag and drop event handlers
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', index.toString());
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+
+    if (draggedIndex === null || draggedIndex === index) {
+      setDragOverIndex(null);
+      setDropPosition(null);
+      return;
+    }
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const midX = rect.left + rect.width / 2;
+    setDragOverIndex(index);
+    setDropPosition(e.clientX < midX ? 'before' : 'after');
+  };
+
+  const handleDrop = (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === targetIndex) {
+      setDraggedIndex(null);
+      setDragOverIndex(null);
+      setDropPosition(null);
+      return;
+    }
+
+    let newIdx = targetIndex;
+    if (dropPosition === 'after' && draggedIndex < targetIndex) {
+      newIdx = targetIndex;
+    } else if (dropPosition === 'after' && draggedIndex > targetIndex) {
+      newIdx = targetIndex + 1;
+    } else if (dropPosition === 'before' && draggedIndex < targetIndex) {
+      newIdx = targetIndex - 1;
+    }
+
+    newIdx = Math.max(0, Math.min(scenes.length - 1, newIdx));
+    handleReorder(draggedIndex, newIdx);
+
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+    setDropPosition(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+    setDropPosition(null);
+  };
+
+  const formatSecs = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const handleCopyPrompt = (id: string, text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 1800);
+  };
+
+  const toggleTuning = (id: string) => {
+    setOpenTuningIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handlePreviewVoice = (scene: Scene) => {
+    if (previewingVoiceId === scene.id) {
+      audioEngine.stopNarration();
+      setPreviewingVoiceId(null);
+      return;
+    }
+
+    setPreviewingVoiceId(scene.id);
+    audioEngine.speakNarration(
+      scene.voiceoverText,
+      scene.voiceActor,
+      () => setPreviewingVoiceId(scene.id),
+      () => setPreviewingVoiceId(null),
+      scene.audioVolume ?? 1.0,
+      scene.voicePitch ?? 1.0,
+      scene.voiceRate ?? 1.0
+    );
+  };
+
+  // Bulk Selection Handlers
+  const toggleSelectScene = (id: string) => {
+    setSelectedSceneIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAll = () => {
+    setSelectedSceneIds(scenes.map((s) => s.id));
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedSceneIds([]);
+  };
+
+  const triggerFeedback = (msg: string) => {
+    setBulkFeedback(msg);
+    setTimeout(() => setBulkFeedback(null), 2500);
+  };
+
+  // Apply Bulk Voice Actor
+  const handleApplyBulkVoice = () => {
+    if (selectedSceneIds.length === 0) return;
+    if (onBulkUpdateScenes) {
+      onBulkUpdateScenes(selectedSceneIds, { voiceActor: bulkVoiceActor });
+    } else {
+      selectedSceneIds.forEach((id) => onUpdateScene(id, { voiceActor: bulkVoiceActor }));
+    }
+    triggerFeedback(`Re-assigned ${selectedSceneIds.length} scene(s) to "${bulkVoiceActor}"`);
+  };
+
+  // Apply Bulk Audio Volume Level
+  const handleApplyBulkVolume = () => {
+    if (selectedSceneIds.length === 0) return;
+    if (onBulkUpdateScenes) {
+      onBulkUpdateScenes(selectedSceneIds, { audioVolume: bulkVolume });
+    } else {
+      selectedSceneIds.forEach((id) => onUpdateScene(id, { audioVolume: bulkVolume }));
+    }
+    triggerFeedback(`Set volume to ${Math.round(bulkVolume * 100)}% for ${selectedSceneIds.length} scene(s)`);
+  };
+
+  // Apply Bulk Pitch and Speed Delivery
+  const handleApplyBulkDelivery = () => {
+    if (selectedSceneIds.length === 0) return;
+    if (onBulkUpdateScenes) {
+      onBulkUpdateScenes(selectedSceneIds, { voicePitch: bulkPitch, voiceRate: bulkRate });
+    } else {
+      selectedSceneIds.forEach((id) => onUpdateScene(id, { voicePitch: bulkPitch, voiceRate: bulkRate }));
+    }
+    triggerFeedback(`Applied pitch ${bulkPitch.toFixed(2)}x & speed ${bulkRate.toFixed(2)}x to ${selectedSceneIds.length} scene(s)`);
+  };
+
+  // Apply Bulk Transition Effect
+  const handleApplyBulkTransition = () => {
+    if (selectedSceneIds.length === 0) return;
+    if (onBulkUpdateScenes) {
+      onBulkUpdateScenes(selectedSceneIds, { transitionEffect: bulkTransition });
+    } else {
+      selectedSceneIds.forEach((id) => onUpdateScene(id, { transitionEffect: bulkTransition }));
+    }
+    triggerFeedback(`Applied "${bulkTransition}" transition to ${selectedSceneIds.length} scene(s)`);
+  };
+
+  // Apply Bulk Character Reference
+  const handleApplyBulkCharacter = () => {
+    if (selectedSceneIds.length === 0) return;
+    const targetChar = characters.find((c) => c.id === bulkCharacterId);
+    if (!targetChar) return;
+    const updates: Partial<Scene> = {
+      characterId: targetChar.id,
+      characterName: targetChar.name,
+      characterRole: targetChar.role,
+      characterDescription: targetChar.description,
+      characterAvatar: targetChar.imageUrl,
+      characterAccent: targetChar.colorAccent,
+      voiceActor: targetChar.assignedVoice,
+    };
+    if (onBulkUpdateScenes) {
+      onBulkUpdateScenes(selectedSceneIds, updates);
+    } else {
+      selectedSceneIds.forEach((id) => onUpdateScene(id, updates));
+    }
+    triggerFeedback(`Linked ${selectedSceneIds.length} scene(s) to ${targetChar.name}`);
+  };
+
+  // Bulk Delete
+  const handleBulkDelete = () => {
+    if (selectedSceneIds.length === 0) return;
+    if (onBulkDeleteScenes) {
+      onBulkDeleteScenes(selectedSceneIds);
+    } else {
+      selectedSceneIds.forEach((id) => onDeleteScene(id));
+    }
+    setSelectedSceneIds([]);
+    triggerFeedback(`Deleted ${selectedSceneIds.length} scenes`);
+  };
+
+  return (
+    <div className="h-full flex flex-col bg-[#080a11] text-zinc-200 select-none">
+      {/* Timeline Header Track & Controls */}
+      <div className="h-10 px-4 border-b border-zinc-800/80 bg-[#0c101a] flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Layers className="w-4 h-4 text-cyan-400" />
+            <span className="text-xs font-bold font-mono uppercase tracking-wider text-zinc-200">
+              Interactive Video Timeline
+            </span>
+          </div>
+          <span className="text-[11px] font-mono text-zinc-500">
+            ({scenes.length} Scenes Sequenced)
+          </span>
+
+          <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono text-cyan-400/90 bg-cyan-950/40 px-2 py-0.5 rounded border border-cyan-500/20">
+            <GripVertical className="w-3 h-3 text-cyan-400" />
+            <span>Drag cards to reorder</span>
+          </span>
+
+          {bulkFeedback && (
+            <span className="text-[11px] font-mono text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30 animate-pulse">
+              ✓ {bulkFeedback}
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Bulk Edit Mode Toggle Button */}
+          <button
+            onClick={() => {
+              const next = !isBulkMode;
+              setIsBulkMode(next);
+              if (!next) setSelectedSceneIds([]);
+            }}
+            className={`px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+              isBulkMode
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow-[0_0_10px_rgba(255,170,0,0.2)]'
+                : 'bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 border border-zinc-700/60'
+            }`}
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5 text-amber-400" />
+            <span>{isBulkMode ? 'Exit Bulk Mode' : 'Bulk Edit Mode'}</span>
+            {selectedSceneIds.length > 0 && (
+              <span className="w-4 h-4 rounded-full bg-amber-400 text-black text-[10px] font-bold flex items-center justify-center">
+                {selectedSceneIds.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={onAddScene}
+            className="px-2.5 py-1 rounded-md text-xs font-semibold bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 flex items-center gap-1.5 transition-all cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Add Scene</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Bulk Editing Floating Action Dock */}
+      {isBulkMode && (
+        <div className="bg-[#101423] border-b border-cyan-500/30 px-4 py-2 flex flex-wrap items-center justify-between gap-3 text-xs z-20 shadow-lg animate-in fade-in duration-200">
+          {/* Left Selection Controls */}
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-cyan-300 font-bold px-2 py-0.5 rounded bg-cyan-950/60 border border-cyan-500/30 text-[11px]">
+              {selectedSceneIds.length} of {scenes.length} Selected
+            </span>
+            <button
+              onClick={handleSelectAll}
+              className="px-2 py-1 rounded bg-[#182035] hover:bg-[#202a45] text-zinc-300 hover:text-white border border-zinc-700 text-[11px] transition-colors cursor-pointer"
+            >
+              Select All
+            </button>
+            <button
+              onClick={handleDeselectAll}
+              className="px-2 py-1 rounded bg-[#182035] hover:bg-[#202a45] text-zinc-400 hover:text-white border border-zinc-700 text-[11px] transition-colors cursor-pointer"
+            >
+              Clear
+            </button>
+          </div>
+
+          {/* Center Action: Re-assign Voice Actor */}
+          <div className="flex items-center gap-2 bg-[#090c15] px-3 py-1.5 rounded-lg border border-zinc-800">
+            <Mic className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+            <span className="text-[11px] font-medium text-zinc-300">Voice:</span>
+            <select
+              value={bulkVoiceActor}
+              onChange={(e) => setBulkVoiceActor(e.target.value)}
+              className="bg-[#121626] border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200 focus:outline-none focus:border-cyan-500 cursor-pointer"
+            >
+              {VOICE_ACTORS.map((va) => (
+                <option key={va.id} value={va.category}>
+                  {va.name} ({va.category})
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={handleApplyBulkVoice}
+              disabled={selectedSceneIds.length === 0}
+              className="px-2.5 py-1 rounded bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-[11px] disabled:opacity-40 disabled:pointer-events-none transition-all cursor-pointer shadow-[0_0_8px_rgba(0,240,255,0.2)]"
+            >
+              Apply Voice
+            </button>
+          </div>
+
+          {/* Center-Right Action: Pitch & Speed Delivery */}
+          <div className="flex items-center gap-2 bg-[#090c15] px-3 py-1.5 rounded-lg border border-zinc-800">
+            <SlidersHorizontal className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+            <div className="flex items-center gap-2 text-[11px] font-medium text-zinc-300">
+              <span>Pitch:</span>
+              <input
+                type="range"
+                min="0.6"
+                max="1.4"
+                step="0.05"
+                value={bulkPitch}
+                onChange={(e) => setBulkPitch(parseFloat(e.target.value))}
+                className="w-12 h-1 bg-zinc-800 rounded accent-cyan-400 cursor-pointer"
+              />
+              <span className="font-mono text-cyan-300 text-[10px] w-7">{bulkPitch.toFixed(2)}x</span>
+
+              <span>Speed:</span>
+              <input
+                type="range"
+                min="0.7"
+                max="1.4"
+                step="0.05"
+                value={bulkRate}
+                onChange={(e) => setBulkRate(parseFloat(e.target.value))}
+                className="w-12 h-1 bg-zinc-800 rounded accent-amber-400 cursor-pointer"
+              />
+              <span className="font-mono text-amber-300 text-[10px] w-7">{bulkRate.toFixed(2)}x</span>
+            </div>
+            <button
+              onClick={handleApplyBulkDelivery}
+              disabled={selectedSceneIds.length === 0}
+              className="px-2 py-1 rounded bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-[11px] disabled:opacity-40 disabled:pointer-events-none transition-all cursor-pointer shadow-[0_0_8px_rgba(0,240,255,0.2)]"
+            >
+              Apply Delivery
+            </button>
+          </div>
+
+          {/* Right Action: Transitions */}
+          <div className="flex items-center gap-2 bg-[#090c15] px-3 py-1.5 rounded-lg border border-zinc-800">
+            <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span className="text-[11px] font-medium text-zinc-300">Transition:</span>
+            <select
+              value={bulkTransition}
+              onChange={(e) => setBulkTransition(e.target.value as TransitionEffect)}
+              className="bg-[#121626] border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200 focus:outline-none focus:border-amber-500 cursor-pointer"
+            >
+              {TRANSITION_EFFECTS.map((tr) => (
+                <option key={tr.id} value={tr.id}>
+                  {tr.label}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={handleApplyBulkTransition}
+              disabled={selectedSceneIds.length === 0}
+              className="px-2.5 py-1 rounded bg-amber-500 hover:bg-amber-400 text-black font-bold text-[11px] disabled:opacity-40 disabled:pointer-events-none transition-all cursor-pointer shadow-[0_0_8px_rgba(255,170,0,0.2)]"
+            >
+              Apply Transition
+            </button>
+          </div>
+
+          {/* Right Action: Audio Volume Levels */}
+          <div className="flex items-center gap-2 bg-[#090c15] px-3 py-1.5 rounded-lg border border-zinc-800">
+            <Volume2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span className="text-[11px] font-medium text-zinc-300">Vol:</span>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={bulkVolume}
+              onChange={(e) => setBulkVolume(parseFloat(e.target.value))}
+              className="w-16 h-1.5 bg-zinc-800 rounded accent-amber-400 cursor-pointer"
+            />
+            <span className="font-mono text-amber-300 font-semibold w-8 text-right text-[11px]">
+              {Math.round(bulkVolume * 100)}%
+            </span>
+            <button
+              onClick={handleApplyBulkVolume}
+              disabled={selectedSceneIds.length === 0}
+              className="px-2.5 py-1 rounded bg-amber-500 hover:bg-amber-400 text-black font-bold text-[11px] disabled:opacity-40 disabled:pointer-events-none transition-all cursor-pointer shadow-[0_0_8px_rgba(255,170,0,0.2)]"
+            >
+              Apply Vol
+            </button>
+          </div>
+
+          {/* Delete Action & Close */}
+          <div className="flex items-center gap-2">
+            {selectedSceneIds.length > 0 && (
+              <button
+                onClick={handleBulkDelete}
+                className="px-2.5 py-1 rounded bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[11px] font-semibold transition-all cursor-pointer flex items-center gap-1"
+              >
+                <Trash2 className="w-3 h-3" />
+                Delete ({selectedSceneIds.length})
+              </button>
+            )}
+            <button
+              onClick={() => {
+                setIsBulkMode(false);
+                setSelectedSceneIds([]);
+              }}
+              className="p-1 rounded text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+              title="Close Bulk Editing"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Horizontal Scrollable Timeline Area */}
+      <div
+        ref={timelineScrollRef}
+        className="flex-1 overflow-x-auto p-4 custom-scrollbar flex items-start gap-4 min-h-[310px]"
+      >
+        {scenes.map((scene, index) => {
+          const isSelected = currentSceneIndex === index;
+          const isBulkSelected = selectedSceneIds.includes(scene.id);
+          const isRendering = scene.status === 'rendering';
+          const isDraggingThis = draggedIndex === index;
+          const isTargeted = dragOverIndex === index;
+
+          return (
+            <div
+              key={scene.id}
+              draggable={!isBulkMode}
+              onDragStart={(e) => handleDragStart(e, index)}
+              onDragOver={(e) => handleDragOver(e, index)}
+              onDrop={(e) => handleDrop(e, index)}
+              onDragEnd={handleDragEnd}
+              onClick={() => {
+                if (isBulkMode) {
+                  toggleSelectScene(scene.id);
+                } else {
+                  setCurrentSceneIndex(index);
+                  onSeekToScene(scene);
+                }
+              }}
+              className={`w-[330px] shrink-0 rounded-xl border transition-all duration-200 flex flex-col bg-[#0b0e18] shadow-lg relative cursor-pointer select-none ${
+                isDraggingThis
+                  ? 'opacity-40 scale-[0.98] border-dashed border-cyan-400 ring-2 ring-cyan-500/30'
+                  : isTargeted
+                  ? 'border-cyan-400 ring-2 ring-cyan-400 shadow-[0_0_30px_rgba(0,240,255,0.3)] bg-[#0f1528]'
+                  : isBulkSelected
+                  ? 'border-amber-400 ring-2 ring-amber-400/50 shadow-[0_0_25px_rgba(255,170,0,0.25)] bg-[#12131d]'
+                  : isSelected
+                  ? 'border-cyan-500 ring-1 ring-cyan-500/40 shadow-[0_0_20px_rgba(0,240,255,0.15)]'
+                  : 'border-zinc-800/90 hover:border-zinc-700'
+              }`}
+            >
+              {/* Visual Vertical Drop Target Insertion Indicator */}
+              {isTargeted && (
+                <div
+                  className={`absolute top-0 bottom-0 w-2 z-40 pointer-events-none rounded-full bg-cyan-400 shadow-[0_0_15px_#00f0ff] animate-pulse ${
+                    dropPosition === 'before' ? '-left-3' : '-right-3'
+                  }`}
+                />
+              )}
+
+              {/* Scene Card Header */}
+              <div className="p-3 border-b border-zinc-850 flex items-center justify-between bg-[#0e1322]/80 rounded-t-xl gap-1">
+                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                  {/* Drag Grip Handle */}
+                  {!isBulkMode && (
+                    <div
+                      className="p-1 -ml-1 text-zinc-500 hover:text-cyan-400 cursor-grab active:cursor-grabbing rounded hover:bg-zinc-800 transition-colors shrink-0"
+                      title="Drag to reorder scene sequence"
+                    >
+                      <GripVertical className="w-3.5 h-3.5" />
+                    </div>
+                  )}
+
+                  {/* Bulk Selection Checkbox */}
+                  {isBulkMode ? (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleSelectScene(scene.id);
+                      }}
+                      className="p-0.5 rounded text-amber-400 hover:text-amber-300 cursor-pointer shrink-0"
+                    >
+                      {isBulkSelected ? (
+                        <CheckSquare className="w-4 h-4 text-amber-400 fill-amber-400/20" />
+                      ) : (
+                        <Square className="w-4 h-4 text-zinc-500" />
+                      )}
+                    </button>
+                  ) : (
+                    <span
+                      className={`w-5 h-5 rounded-md text-[10px] font-mono font-bold flex items-center justify-center shrink-0 ${
+                        isSelected
+                          ? 'bg-cyan-500 text-black shadow-[0_0_8px_#00f0ff]'
+                          : 'bg-zinc-800 text-zinc-300'
+                      }`}
+                    >
+                      #{scene.sceneNumber}
+                    </span>
+                  )}
+
+                  <input
+                    type="text"
+                    value={scene.title}
+                    onChange={(e) => onUpdateScene(scene.id, { title: e.target.value })}
+                    onClick={(e) => e.stopPropagation()}
+                    className="bg-transparent text-xs font-bold text-zinc-200 focus:outline-none focus:text-cyan-300 w-24 truncate font-sans"
+                  />
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {/* Single-Click Shift Left/Right Arrows for Rapid Reordering */}
+                  {!isBulkMode && (
+                    <div
+                      className="flex items-center gap-0.5 bg-[#080b12] p-0.5 rounded border border-zinc-800"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        onClick={() => handleReorder(index, index - 1)}
+                        disabled={index === 0}
+                        title="Move Scene Earlier (Shift Left)"
+                        className="p-0.5 rounded text-zinc-400 hover:text-cyan-300 disabled:opacity-20 disabled:hover:text-zinc-600 hover:bg-zinc-800 transition-colors cursor-pointer disabled:cursor-not-allowed"
+                      >
+                        <ChevronLeft className="w-3 h-3" />
+                      </button>
+                      <button
+                        onClick={() => handleReorder(index, index + 1)}
+                        disabled={index === scenes.length - 1}
+                        title="Move Scene Later (Shift Right)"
+                        className="p-0.5 rounded text-zinc-400 hover:text-cyan-300 disabled:opacity-20 disabled:hover:text-zinc-600 hover:bg-zinc-800 transition-colors cursor-pointer disabled:cursor-not-allowed"
+                      >
+                        <ChevronRight className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
+
+                  <span className="text-[10px] font-mono text-amber-400 bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-500/20">
+                    {formatSecs(scene.startTime)} - {formatSecs(scene.endTime)}
+                  </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteScene(scene.id);
+                    }}
+                    title="Delete Scene"
+                    className="p-1 text-zinc-500 hover:text-rose-400 rounded transition-colors cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Scene Audio, Voice Actor & Transition Badges */}
+              <div className="px-3 pt-2 flex items-center justify-between text-[10px] font-mono">
+                <span className="text-cyan-400 bg-cyan-950/40 px-2 py-0.5 rounded border border-cyan-500/20 flex items-center gap-1">
+                  <Mic className="w-2.5 h-2.5" />
+                  <span className="truncate max-w-[80px]">{scene.voiceActor.split(' ')[0]}</span>
+                </span>
+                <span className="text-amber-300 bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-500/20 text-[9px] flex items-center gap-1">
+                  <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                  <span>Tr: {scene.transitionEffect || 'Dissolve'}</span>
+                </span>
+                <span className="text-zinc-400 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800 text-[9px]">
+                  Vol: {Math.round((scene.audioVolume ?? 1.0) * 100)}%
+                </span>
+              </div>
+
+              {/* Card Body */}
+              <div className="p-3 space-y-3 flex-1 flex flex-col">
+                {/* 1. AI Video Generation Status & Progress Bar */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[11px] font-mono">
+                    <span className="flex items-center gap-1.5 text-zinc-300">
+                      <span
+                        className={`w-2 h-2 rounded-full ${
+                          isRendering ? 'bg-amber-400 animate-ping' : 'bg-emerald-400'
+                        }`}
+                      />
+                      <span className="truncate max-w-[200px] text-zinc-300">
+                        {scene.generationPhase || 'Rendering Ready'}
+                      </span>
+                    </span>
+                    <span className="text-cyan-400 font-bold">{scene.progress}%</span>
+                  </div>
+
+                  <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                    <div
+                      style={{ width: `${scene.progress}%` }}
+                      className={`h-full transition-all duration-300 ${
+                        isRendering
+                          ? 'bg-gradient-to-r from-amber-500 to-cyan-400 animate-pulse'
+                          : 'bg-cyan-400 shadow-[0_0_8px_#00f0ff]'
+                      }`}
+                    />
+                  </div>
+                </div>
+
+                {/* 2. Thumbnail displaying the generated moving video clip */}
+                <MovingSceneThumbnail scene={scene} isSelected={isSelected} />
+
+                {/* Camera Motion Path Visualization & Intensity Tuning */}
+                <div className="space-y-1" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-between text-[10px] text-zinc-400 font-medium">
+                    <span className="flex items-center gap-1">
+                      <Camera className="w-3 h-3 text-cyan-400" />
+                      Camera Motion & Path
+                    </span>
+                    <span className="text-zinc-500 font-mono text-[9px]">Click to tune intensity</span>
+                  </div>
+                  <CameraMotionPanel
+                    scene={scene}
+                    onUpdateScene={onUpdateScene}
+                    onApplyToAllScenes={(motion, speed, intensity) => {
+                      scenes.forEach((s) => {
+                        onUpdateScene(s.id, {
+                          cameraMotion: motion,
+                          cameraSpeed: speed,
+                          cameraIntensity: intensity,
+                        });
+                      });
+                      triggerFeedback(`Applied "${intensity}" ${motion.split(',')[0]} to all shots`);
+                    }}
+                  />
+                </div>
+
+                {/* Transitions Selector */}
+                <div className="space-y-1" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-between text-[10px] text-zinc-400 font-medium">
+                    <span className="flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-amber-400" />
+                      Visual Transition to Next Clip
+                    </span>
+                    <span className="text-cyan-300 font-mono text-[9px] font-semibold">
+                      {scene.transitionEffect || 'Dissolve'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-5 gap-1">
+                    {TRANSITION_EFFECTS.map((tr) => {
+                      const isSelected = (scene.transitionEffect || 'Dissolve') === tr.id;
+                      return (
+                        <button
+                          key={tr.id}
+                          onClick={() => onUpdateScene(scene.id, { transitionEffect: tr.id })}
+                          className={`py-1 px-0.5 rounded text-[9px] font-mono border transition-all cursor-pointer text-center truncate ${
+                            isSelected
+                              ? 'border-amber-400 bg-amber-950/40 text-amber-300 font-bold shadow-[0_0_8px_rgba(255,170,0,0.25)]'
+                              : 'border-zinc-800 bg-[#07090f] text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
+                          }`}
+                          title={tr.desc}
+                        >
+                          {tr.id === 'Cinematic Wipe' ? 'Wipe' : tr.id}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 3. Editable Voiceover Script Box & Delivery Tuning */}
+                <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-between text-[10px] text-zinc-400 font-medium">
+                    <span className="flex items-center gap-1">
+                      <Mic className="w-3 h-3 text-cyan-400" />
+                      Voiceover Narration Script
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => toggleTuning(scene.id)}
+                        className={`text-[9px] font-mono flex items-center gap-1 px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${
+                          openTuningIds.includes(scene.id)
+                            ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                            : 'bg-zinc-850 hover:bg-zinc-800 text-zinc-400 border-zinc-700/60'
+                        }`}
+                        title="Tune pitch and speed delivery"
+                      >
+                        <SlidersHorizontal className="w-2.5 h-2.5 text-cyan-400" />
+                        <span>Tune Delivery</span>
+                      </button>
+                      <button
+                        onClick={() => handlePreviewVoice(scene)}
+                        className={`text-[10px] flex items-center gap-1 px-1.5 py-0.5 rounded cursor-pointer transition-colors ${
+                          previewingVoiceId === scene.id
+                            ? 'bg-rose-500/20 text-rose-300'
+                            : 'hover:text-cyan-300 text-zinc-400'
+                        }`}
+                      >
+                        <Play className="w-2.5 h-2.5" />
+                        {previewingVoiceId === scene.id ? 'Playing' : 'Listen'}
+                      </button>
+                    </div>
+                  </div>
+                  <textarea
+                    value={scene.voiceoverText}
+                    onChange={(e) => onUpdateScene(scene.id, { voiceoverText: e.target.value })}
+                    rows={2}
+                    className="w-full bg-[#07090f] border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200 focus:outline-none focus:border-cyan-500/60 resize-none font-sans"
+                    placeholder="Enter spoken narration for this scene..."
+                  />
+
+                  {/* Pitch & Speed Delivery Sliders Drawer */}
+                  {openTuningIds.includes(scene.id) && (
+                    <div className="bg-[#070a12] border border-zinc-800/90 rounded-lg p-2 space-y-2 animate-in fade-in duration-150">
+                      {/* Pitch Slider */}
+                      <div className="space-y-0.5">
+                        <div className="flex items-center justify-between text-[10px] font-mono">
+                          <span className="text-zinc-400 flex items-center gap-1">
+                            <span>Pitch:</span>
+                            <span className="text-zinc-500 text-[9px]">
+                              {(scene.voicePitch ?? 1.0) < 0.95
+                                ? '(Deeper)'
+                                : (scene.voicePitch ?? 1.0) > 1.05
+                                ? '(Higher)'
+                                : '(Normal)'}
+                            </span>
+                          </span>
+                          <span className="text-cyan-300 font-semibold">
+                            {(scene.voicePitch ?? 1.0).toFixed(2)}x
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0.6"
+                          max="1.4"
+                          step="0.05"
+                          value={scene.voicePitch ?? 1.0}
+                          onChange={(e) => onUpdateScene(scene.id, { voicePitch: parseFloat(e.target.value) })}
+                          className="w-full h-1 bg-zinc-800 rounded accent-cyan-400 cursor-pointer"
+                        />
+                      </div>
+
+                      {/* Speed Slider */}
+                      <div className="space-y-0.5">
+                        <div className="flex items-center justify-between text-[10px] font-mono">
+                          <span className="text-zinc-400 flex items-center gap-1">
+                            <span>Speed:</span>
+                            <span className="text-zinc-500 text-[9px]">
+                              {(scene.voiceRate ?? 1.0) < 0.95
+                                ? '(Slower)'
+                                : (scene.voiceRate ?? 1.0) > 1.05
+                                ? '(Faster)'
+                                : '(Normal)'}
+                            </span>
+                          </span>
+                          <span className="text-amber-300 font-semibold">
+                            {(scene.voiceRate ?? 1.0).toFixed(2)}x
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0.7"
+                          max="1.4"
+                          step="0.05"
+                          value={scene.voiceRate ?? 1.0}
+                          onChange={(e) => onUpdateScene(scene.id, { voiceRate: parseFloat(e.target.value) })}
+                          className="w-full h-1 bg-zinc-800 rounded accent-amber-400 cursor-pointer"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between pt-0.5 text-[9px] font-mono text-zinc-500">
+                        <span>Delivery tuned per scene</span>
+                        <button
+                          onClick={() => onUpdateScene(scene.id, { voicePitch: 1.0, voiceRate: 1.0 })}
+                          className="text-zinc-400 hover:text-cyan-300 underline cursor-pointer"
+                        >
+                          Reset Defaults (1.0x)
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 4. Editable Video Generator API Prompt Box */}
+                <div className="space-y-1" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-between text-[10px] text-zinc-400 font-medium">
+                    <span className="flex items-center gap-1">
+                      <FileCode className="w-3 h-3 text-amber-400" />
+                      Video API Prompt ({scene.videoGenerator.split(' ')[0]})
+                    </span>
+                    <button
+                      onClick={() => handleCopyPrompt(scene.id, scene.videoPrompt)}
+                      className="text-[10px] text-zinc-400 hover:text-amber-300 flex items-center gap-1 transition-colors cursor-pointer"
+                    >
+                      {copiedId === scene.id ? (
+                        <>
+                          <Check className="w-2.5 h-2.5 text-emerald-400" />
+                          <span className="text-emerald-400">Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-2.5 h-2.5" />
+                          <span>Copy</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <textarea
+                    value={scene.videoPrompt}
+                    onChange={(e) => onUpdateScene(scene.id, { videoPrompt: e.target.value })}
+                    rows={2}
+                    className="w-full bg-[#07090f] border border-zinc-800 rounded-lg p-2 text-[11px] font-mono text-zinc-300 focus:outline-none focus:border-amber-500/60 resize-none"
+                    placeholder="Generative prompt with camera, lighting, textures..."
+                  />
+                </div>
+
+                {/* 5. Controls: Re-generate Clip & Extend Scene (+4s) */}
+                <div className="pt-2 border-t border-zinc-850 grid grid-cols-2 gap-2" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={() => onRegenerateScene(scene.id)}
+                    disabled={isRendering}
+                    className="py-1.5 px-2 rounded-lg bg-[#141926] hover:bg-cyan-950/40 text-cyan-300 hover:text-cyan-200 border border-zinc-800 hover:border-cyan-500/40 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-all disabled:opacity-40 cursor-pointer"
+                  >
+                    <RotateCcw className={`w-3 h-3 ${isRendering ? 'animate-spin' : ''}`} />
+                    <span>Re-generate</span>
+                  </button>
+
+                  <button
+                    onClick={() => onExtendScene(scene.id)}
+                    className="py-1.5 px-2 rounded-lg bg-[#141926] hover:bg-amber-950/40 text-amber-300 hover:text-amber-200 border border-zinc-800 hover:border-amber-500/40 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <Clock className="w-3 h-3" />
+                    <span>Extend (+4s)</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Append Scene Card */}
+        <div
+          onClick={onAddScene}
+          className="w-[200px] h-[350px] shrink-0 rounded-xl border border-dashed border-zinc-800 hover:border-cyan-500/60 bg-[#090c14]/50 hover:bg-cyan-950/10 flex flex-col items-center justify-center text-zinc-500 hover:text-cyan-300 transition-all cursor-pointer group"
+        >
+          <div className="w-12 h-12 rounded-full bg-zinc-900 group-hover:bg-cyan-500/20 border border-zinc-800 group-hover:border-cyan-500/40 flex items-center justify-center mb-2 transition-all">
+            <Plus className="w-6 h-6 group-hover:scale-110 transition-transform" />
+          </div>
+          <span className="text-xs font-bold font-mono uppercase tracking-wider">
+            + Append Scene
+          </span>
+          <span className="text-[10px] text-zinc-600 mt-1">Insert next camera shot</span>
+        </div>
+      </div>
+    </div>
+  );
+};

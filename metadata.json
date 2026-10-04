@@ -1,0 +1,6 @@
+{
+  "name": "StoryCast AI Pro",
+  "description": "Convert written stories and scripts into fully animated AI video productions with customizable voiceovers, scene timeline, and master MP4 export.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
