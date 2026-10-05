@@ -54,6 +54,10 @@ export async function exportMasterVideo(
     audioDest.stream.getAudioTracks().forEach((track) => combinedStream.addTrack(track));
   }
 
+  // Configure automated audio ducking schedule based on scene voiceover timestamps
+  const voiceSegments = audioEngine.calculateVoiceoverSegments(scenes);
+  audioEngine.setDuckingSchedule(voiceSegments);
+
   // Start background music during export capture
   audioEngine.startMusic(musicStyle);
 
@@ -99,6 +103,10 @@ export async function exportMasterVideo(
       // Soft finish into next clip
       transitionProgress = 1 - (timeInCurrentScene / 0.25);
     }
+
+    // Dynamically evaluate automated audio ducking for narration timestamps
+    const currentGlobalTime = frame * frameDuration;
+    audioEngine.updateDuckingAtTime(currentGlobalTime);
 
     renderCinematicFrame(ctx, width, height, {
       scene: currentScene,

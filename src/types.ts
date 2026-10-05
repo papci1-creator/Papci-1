@@ -21,16 +21,28 @@ export interface CharacterReferenceSheet {
   canvasSheetDataUrl?: string;
 }
 
+export interface CharacterOutfit {
+  id: string;
+  name: string; // e.g. "Outfit 1: Astronaut Spacesuit"
+  description: string; // e.g. "Matte white pressurized EVA spacesuit with gold-tinted reflective visor and blue neon life-support conduits"
+  imageUrl?: string; // optional thumbnail reference
+  colorAccent?: string;
+  isDefault?: boolean;
+}
+
 export interface CharacterProfile {
   id: string;
   name: string;
   tag: string; // e.g. '@Leo'
   role: CharacterRole;
   description: string;
+  faceDescription?: string; // Baseline face/physical features description
   imageUrl?: string;
   avatarSvg?: string;
   assignedVoice: string; // category of VoiceActorProfile
   colorAccent: string; // glowing hex accent color
+  outfits: CharacterOutfit[]; // Dynamic Outfit Wardrobe sub-list
+  activeOutfitId?: string;
   referenceSheet?: CharacterReferenceSheet;
 }
 
@@ -61,6 +73,11 @@ export interface Scene {
   characterDescription?: string;
   characterAvatar?: string;
   characterAccent?: string;
+  outfitId?: string; // ID of chosen outfit for this scene
+  outfitName?: string; // Name of chosen outfit
+  outfitDescription?: string; // Detailed outfit specs
+  outfitImage?: string; // Thumbnail reference for outfit
+  detectedCharacters?: string[]; // Character tags/names auto-detected in this scene
   status: 'queued' | 'rendering' | 'ready' | 'error';
   progress: number;
   generationPhase: string;
@@ -91,3 +108,35 @@ export interface PresetStory {
   musicStyle: string;
   text: string;
 }
+
+export interface ProjectConfiguration {
+  projectTitle: string;
+  storyText: string;
+  visualStyle: string;
+  videoGenerator: string;
+  voiceActor: string;
+  musicStyle: string;
+  musicVolume: number;
+  defaultCameraMovement: string;
+  aspectRatio: AspectRatio;
+  characters: CharacterProfile[];
+  activeCharacterId: string | null;
+}
+
+export interface MediaEngineState {
+  scenes: Scene[];
+  currentSceneIndex: number;
+  currentTime: number;
+  isPlaying: boolean;
+  isGenerating: boolean;
+  totalDuration: number;
+}
+
+export interface MasterExportConfig {
+  format: 'mp4' | 'webm';
+  resolution: '1080p' | '4k';
+  includeAudio: boolean;
+  includeSubtitles: boolean;
+  aspectRatio: AspectRatio;
+}
+

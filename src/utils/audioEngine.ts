@@ -1,4 +1,27 @@
-// Web Audio API ambient music synthesizer & speech coordinator
+// Web Audio API ambient music synthesizer & automated audio ducking coordinator
+import { Scene } from '../types';
+
+export interface VoiceoverSegment {
+  id: string;
+  sceneNumber: number;
+  startTime: number; // in seconds from start of timeline
+  endTime: number;   // in seconds from start of timeline
+  duration: number;  // duration in seconds
+  text: string;
+  speaker?: string;
+  duckingDepth?: number; // optional custom ducking depth (0.0 to 1.0, e.g. 0.20)
+}
+
+export interface DuckingConfig {
+  enabled: boolean;
+  duckingGain: number;      // Ratio of nominal volume during voiceover (e.g., 0.20 = 20% of volume / -14dB)
+  attackDuration: number;   // Seconds to smoothly attenuate music when voiceover starts (e.g., 0.25s)
+  releaseDuration: number;  // Seconds to smoothly restore music after voiceover ends (e.g., 0.60s)
+  preRollPadding: number;   // Seconds before voiceover to start anticipating duck (e.g., 0.15s)
+  postRollPadding: number;  // Seconds after voiceover to hold ducking before release (e.g., 0.35s)
+}
+
+type DuckingListener = (isDucking: boolean, currentGain: number, activeSegment: VoiceoverSegment | null) => void;
 
 class AudioEngine {
   private ctx: AudioContext | null = null;
@@ -9,7 +32,23 @@ class AudioEngine {
   private oscNodes: OscillatorNode[] = [];
   private activeUtterance: SpeechSynthesisUtterance | null = null;
   private destinationNode: MediaStreamAudioDestinationNode | null = null;
-  private duckingTimeout: any = null;
+
+  // Automated Audio Ducking Subsystem
+  private duckingConfig: DuckingConfig = {
+    enabled: true,
+    duckingGain: 0.22,       // 22% of nominal volume (approx -13dB attenuation)
+    attackDuration: 0.25,    // 250ms smooth fade down
+    releaseDuration: 0.60,   // 600ms smooth cinematic swell back up
+    preRollPadding: 0.15,    // 150ms pre-duck anticipation
+    postRollPadding: 0.35,   // 350ms tail hold for natural speech cadence
+  };
+
+  private nominalMusicVolume: number = 0.35;
+  private isDuckingActive: boolean = false;
+  private isSpeechSpeaking: boolean = false;
+  private voiceoverSegments: VoiceoverSegment[] = [];
+  private activeSegment: VoiceoverSegment | null = null;
+  private listeners: Set<DuckingListener> = new Set();
 
   private initContext() {
     if (!this.ctx) {
@@ -20,7 +59,7 @@ class AudioEngine {
       this.masterGain.connect(this.ctx.destination);
 
       this.musicGain = this.ctx.createGain();
-      this.musicGain.gain.value = 0.3;
+      this.musicGain.gain.value = this.nominalMusicVolume;
       this.musicGain.connect(this.masterGain);
 
       this.destinationNode = this.ctx.createMediaStreamDestination();
@@ -43,10 +82,167 @@ class AudioEngine {
   }
 
   public setMusicVolume(val: number) {
-    if (this.musicGain && this.ctx) {
-      this.musicGain.gain.setTargetAtTime(Math.max(0, Math.min(1, val)), this.ctx.currentTime, 0.05);
+    this.nominalMusicVolume = Math.max(0, Math.min(1, val));
+    if (!this.isDuckingActive && this.musicGain && this.ctx) {
+      this.musicGain.gain.setTargetAtTime(this.nominalMusicVolume, this.ctx.currentTime, 0.05);
     }
   }
+
+  public getMusicVolume(): number {
+    return this.nominalMusicVolume;
+  }
+
+  // ==========================================
+  // Automated Voiceover Timestamp Ducking Engine
+  // ==========================================
+
+  /**
+   * Automatically calculates precise voiceover timestamps and duration windows
+   * for each scene based on narrative word count and fine-tuned speech rate.
+   */
+  public calculateVoiceoverSegments(scenes: Scene[]): VoiceoverSegment[] {
+    return scenes
+      .map((scene) => {
+        const text = (scene.voiceoverText || '').trim();
+        if (!text) return null;
+
+        const words = text.split(/\s+/).length;
+        const rate = scene.voiceRate ?? 1.0;
+        // Standard voice actor delivery is ~135 words per minute
+        // Adjusted by speech rate multiplier
+        const estimatedDurationSecs = Math.max(
+          1.8,
+          Math.min(scene.duration - 0.25, (words / (135 * rate)) * 60)
+        );
+
+        // Pre-roll delay of 0.25s at scene start gives a natural cinematic breath
+        const start = scene.startTime + 0.25;
+        const end = Math.min(scene.endTime, start + estimatedDurationSecs);
+
+        return {
+          id: scene.id,
+          sceneNumber: scene.sceneNumber,
+          startTime: start,
+          endTime: end,
+          duration: end - start,
+          text,
+          speaker: scene.characterName || scene.voiceActor,
+        };
+      })
+      .filter((s): s is VoiceoverSegment => s !== null);
+  }
+
+  /**
+   * Registers a schedule of voiceover segments for automated timeline audio ducking.
+   */
+  public setDuckingSchedule(segments: VoiceoverSegment[]) {
+    this.voiceoverSegments = [...segments].sort((a, b) => a.startTime - b.startTime);
+  }
+
+  /**
+   * Evaluates the current timeline playback timestamp and automatically applies
+   * dynamic audio ducking if the time falls within any voiceover segment.
+   * Call this in your timeline playback loop or frame rendering loop.
+   */
+  public updateDuckingAtTime(currentTimelineTime: number) {
+    if (!this.duckingConfig.enabled) {
+      if (this.isDuckingActive) {
+        this.restoreMusicGain(0.2);
+      }
+      return;
+    }
+
+    const { preRollPadding, postRollPadding } = this.duckingConfig;
+
+    // Find any voiceover segment active at the current timestamp (including padding)
+    const matchingSegment = this.voiceoverSegments.find((seg) => {
+      const windowStart = seg.startTime - preRollPadding;
+      const windowEnd = seg.endTime + postRollPadding;
+      return currentTimelineTime >= windowStart && currentTimelineTime <= windowEnd;
+    });
+
+    const shouldDuck = !!matchingSegment || this.isSpeechSpeaking;
+
+    if (shouldDuck && !this.isDuckingActive) {
+      this.activeSegment = matchingSegment || null;
+      this.applyDuckingGain(matchingSegment?.duckingDepth ?? this.duckingConfig.duckingGain);
+    } else if (!shouldDuck && this.isDuckingActive) {
+      this.activeSegment = null;
+      this.restoreMusicGain();
+    }
+  }
+
+  /**
+   * Smoothly attenuates background music gain using an exponential/linear audio ramp.
+   */
+  private applyDuckingGain(duckRatio: number) {
+    if (!this.musicGain || !this.ctx) return;
+    this.isDuckingActive = true;
+
+    const targetGain = this.nominalMusicVolume * duckRatio;
+    const now = this.ctx.currentTime;
+    const timeConstant = Math.max(0.04, this.duckingConfig.attackDuration / 2.5);
+
+    this.musicGain.gain.cancelScheduledValues(now);
+    this.musicGain.gain.setTargetAtTime(targetGain, now, timeConstant);
+
+    this.notifyListeners(true, targetGain);
+  }
+
+  /**
+   * Smoothly restores background music gain back to nominal level.
+   */
+  private restoreMusicGain(customReleaseDuration?: number) {
+    if (!this.musicGain || !this.ctx) return;
+    this.isDuckingActive = false;
+
+    const now = this.ctx.currentTime;
+    const releaseTime = customReleaseDuration ?? this.duckingConfig.releaseDuration;
+    const timeConstant = Math.max(0.05, releaseTime / 2.5);
+
+    this.musicGain.gain.cancelScheduledValues(now);
+    this.musicGain.gain.setTargetAtTime(this.nominalMusicVolume, now, timeConstant);
+
+    this.notifyListeners(false, this.nominalMusicVolume);
+  }
+
+  /**
+   * Configure ducking parameters (e.g. gain depth, attack, release, enabled status).
+   */
+  public setDuckingConfig(updates: Partial<DuckingConfig>) {
+    this.duckingConfig = { ...this.duckingConfig, ...updates };
+  }
+
+  public getDuckingConfig(): DuckingConfig {
+    return { ...this.duckingConfig };
+  }
+
+  public getIsDuckingActive(): boolean {
+    return this.isDuckingActive;
+  }
+
+  public getActiveVoiceoverSegment(): VoiceoverSegment | null {
+    return this.activeSegment;
+  }
+
+  public onDuckingStateChange(listener: DuckingListener): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  private notifyListeners(isDucking: boolean, currentGain: number) {
+    this.listeners.forEach((listener) => {
+      try {
+        listener(isDucking, currentGain, this.activeSegment);
+      } catch (e) {
+        console.error('Error in audio ducking listener:', e);
+      }
+    });
+  }
+
+  // ==========================================
+  // Background Music Synthesizer
+  // ==========================================
 
   public startMusic(style: string) {
     this.initContext();
@@ -161,17 +357,22 @@ class AudioEngine {
     });
     this.oscNodes = [];
     this.isPlayingMusic = false;
+    this.isDuckingActive = false;
   }
 
-  // Voice ducking: temporarily attenuates music when narrator speaks
+  // Legacy manual ducking hook
   public duckMusic(duck: boolean) {
-    if (!this.musicGain || !this.ctx) return;
-    const target = duck ? 0.08 : 0.28;
-    this.musicGain.gain.cancelScheduledValues(this.ctx.currentTime);
-    this.musicGain.gain.setTargetAtTime(target, this.ctx.currentTime, 0.25);
+    if (duck) {
+      this.applyDuckingGain(this.duckingConfig.duckingGain);
+    } else {
+      this.restoreMusicGain();
+    }
   }
 
-  // Synthesize and speak narration text using Web Speech API with specific voice persona, volume, pitch and speed
+  // ==========================================
+  // Web Speech API Voiceover Narration
+  // ==========================================
+
   public speakNarration(
     text: string,
     voiceProfile: string,
@@ -196,7 +397,6 @@ class AudioEngine {
     let basePitch = 1.0;
     let baseRate = 1.0;
 
-    // Pick best matched browser voice based on persona
     const voices = window.speechSynthesis.getVoices();
     let selectedVoice: SpeechSynthesisVoice | null = null;
 
@@ -231,18 +431,21 @@ class AudioEngine {
     }
 
     utterance.onstart = () => {
-      this.duckMusic(true);
+      this.isSpeechSpeaking = true;
+      this.applyDuckingGain(this.duckingConfig.duckingGain);
       if (onStart) onStart();
     };
 
     utterance.onend = () => {
-      this.duckMusic(false);
+      this.isSpeechSpeaking = false;
+      this.restoreMusicGain();
       this.activeUtterance = null;
       if (onEnd) onEnd();
     };
 
     utterance.onerror = () => {
-      this.duckMusic(false);
+      this.isSpeechSpeaking = false;
+      this.restoreMusicGain();
       this.activeUtterance = null;
       if (onEnd) onEnd();
     };
@@ -256,7 +459,8 @@ class AudioEngine {
       window.speechSynthesis.cancel();
     }
     this.activeUtterance = null;
-    this.duckMusic(false);
+    this.isSpeechSpeaking = false;
+    this.restoreMusicGain();
   }
 }
 

@@ -24,6 +24,11 @@ import {
   User,
   Tag,
   CheckCircle2,
+  Shirt,
+  Check,
+  SlidersHorizontal,
+  ChevronRight,
+  AlertCircle,
 } from 'lucide-react';
 import {
   VISUAL_STYLES,
@@ -36,6 +41,7 @@ import {
 import { CharacterProfile, Scene } from '../types';
 import { CharacterManager } from './CharacterManager';
 import { audioEngine } from '../utils/audioEngine';
+import { parseStoryNLP, compileUnifiedVideoPrompt } from '../utils/nlpParser';
 
 interface StoryStylePanelProps {
   storyText: string;
@@ -56,6 +62,7 @@ interface StoryStylePanelProps {
   isGenerating: boolean;
   onGenerate: () => void;
   onAddManualScene: () => void;
+  onUpdateScene?: (id: string, updates: Partial<Scene>) => void;
   // Characters Props
   characters: CharacterProfile[];
   setCharacters: React.Dispatch<React.SetStateAction<CharacterProfile[]>>;
@@ -85,6 +92,7 @@ export const StoryStylePanel: React.FC<StoryStylePanelProps> = ({
   isGenerating,
   onGenerate,
   onAddManualScene,
+  onUpdateScene,
   characters,
   setCharacters,
   activeCharacterId,
@@ -95,11 +103,59 @@ export const StoryStylePanel: React.FC<StoryStylePanelProps> = ({
 }) => {
   const [isPlayingSampleVoice, setIsPlayingSampleVoice] = useState(false);
   const [activeTab, setActiveTab] = useState<'script' | 'characters' | 'audio'>('script');
+  const [expandedOverrideIndex, setExpandedOverrideIndex] = useState<number | null>(null);
+  const [sceneOverrides, setSceneOverrides] = useState<{
+    [idx: number]: { characterId?: string; outfitId?: string };
+  }>({});
+
+  // NLP Auto-Detection of scenes, characters, dialogue and outfits
+  const parsedSections = parseStoryNLP(storyText, characters, voiceActor);
 
   // Word & estimated duration calculation (~130 words per minute speaking rate)
   const words = storyText.trim() ? storyText.trim().split(/\s+/).length : 0;
   const chars = storyText.length;
   const estimatedSecs = Math.max(12, Math.round((words / 130) * 60));
+
+  const handleOverrideScene = (sceneIndex: number, charId: string, outfitId?: string) => {
+    const chosenChar = characters.find((c) => c.id === charId);
+    const chosenOutfit =
+      chosenChar?.outfits?.find((o) => o.id === outfitId) ||
+      chosenChar?.outfits?.find((o) => o.id === chosenChar.activeOutfitId) ||
+      chosenChar?.outfits?.[0];
+
+    setSceneOverrides((prev) => ({
+      ...prev,
+      [sceneIndex]: { characterId: charId, outfitId: chosenOutfit?.id },
+    }));
+
+    // If scene exists in live timeline, update it immediately with unified prompt!
+    const targetScene = scenes[sceneIndex];
+    if (targetScene && onUpdateScene) {
+      const newPrompt = compileUnifiedVideoPrompt({
+        storySentence: targetScene.voiceoverText,
+        visualStyle,
+        videoGenerator,
+        cameraMotion: targetScene.cameraMotion,
+        character: chosenChar,
+        outfit: chosenOutfit,
+      });
+
+      onUpdateScene(targetScene.id, {
+        characterId: chosenChar?.id,
+        characterName: chosenChar?.name,
+        characterRole: chosenChar?.role,
+        characterDescription: chosenChar?.description,
+        characterAvatar: chosenChar?.imageUrl,
+        characterAccent: chosenChar?.colorAccent,
+        outfitId: chosenOutfit?.id,
+        outfitName: chosenOutfit?.name,
+        outfitDescription: chosenOutfit?.description,
+        outfitImage: chosenOutfit?.imageUrl,
+        voiceActor: chosenChar?.assignedVoice || targetScene.voiceActor,
+        videoPrompt: newPrompt,
+      });
+    }
+  };
 
   const handleTestVoiceSample = () => {
     if (isPlayingSampleVoice) {
@@ -286,6 +342,179 @@ export const StoryStylePanel: React.FC<StoryStylePanelProps> = ({
                 </div>
               </div>
             </div>
+
+            {/* NLP Auto-Detection & Scene Override Controls */}
+            {parsedSections.length > 0 && (
+              <div className="p-3 bg-[#0d1220] border border-cyan-500/25 rounded-2xl space-y-2.5 shadow-lg">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-cyan-300">
+                    <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>NLP Auto-Detection & Scene Overrides</span>
+                  </div>
+                  <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-500/30 font-bold">
+                    {parsedSections.length} Scenes Parsed
+                  </span>
+                </div>
+
+                <p className="text-[11px] text-zinc-400">
+                  Script scanned for character tags, dialogue, and outfit cues. Click any badge to override character or select a wardrobe outfit for that scene.
+                </p>
+
+                {/* List of Detected Scenes */}
+                <div className="space-y-2 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
+                  {parsedSections.map((section, idx) => {
+                    const override = sceneOverrides[idx];
+                    const activeCharId = override?.characterId || section.primaryCharacter?.id;
+                    const activeChar = characters.find((c) => c.id === activeCharId);
+                    const activeOutfitId = override?.outfitId || section.selectedOutfit?.id || activeChar?.activeOutfitId;
+                    const activeOutfit = activeChar?.outfits?.find((o) => o.id === activeOutfitId) || activeChar?.outfits?.[0];
+                    const isExpanded = expandedOverrideIndex === idx;
+
+                    return (
+                      <div
+                        key={idx}
+                        className={`p-2.5 rounded-xl border transition-all text-xs ${
+                          isExpanded
+                            ? 'bg-[#101729] border-cyan-500/60 shadow-[0_0_12px_rgba(0,240,255,0.15)]'
+                            : 'bg-[#080b13] border-zinc-800/90 hover:border-zinc-700'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="w-4 h-4 rounded text-[9px] font-mono font-bold bg-zinc-800 text-zinc-300 flex items-center justify-center shrink-0">
+                                #{idx + 1}
+                              </span>
+                              <span className="text-[11px] font-bold text-zinc-300 truncate">
+                                {section.text.slice(0, 40)}...
+                              </span>
+                            </div>
+
+                            {/* Badges / Pills: Character & Outfit */}
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {/* Character Pill */}
+                              <button
+                                type="button"
+                                onClick={() => setExpandedOverrideIndex(isExpanded ? null : idx)}
+                                className="px-2 py-0.5 rounded-md border text-[10px] font-mono flex items-center gap-1.5 transition-all cursor-pointer"
+                                style={{
+                                  borderColor: activeChar ? `${activeChar.colorAccent}80` : '#3f3f46',
+                                  backgroundColor: activeChar ? `${activeChar.colorAccent}15` : '#18181b',
+                                  color: activeChar ? activeChar.colorAccent : '#a1a1aa',
+                                }}
+                              >
+                                <span
+                                  className="w-1.5 h-1.5 rounded-full"
+                                  style={{ backgroundColor: activeChar?.colorAccent || '#71717a' }}
+                                />
+                                <span className="font-semibold">{activeChar?.name || 'No Character'}</span>
+                              </button>
+
+                              {/* Outfit Pill */}
+                              {activeChar && (
+                                <button
+                                  type="button"
+                                  onClick={() => setExpandedOverrideIndex(isExpanded ? null : idx)}
+                                  className="px-2 py-0.5 rounded-md border border-cyan-500/30 bg-cyan-950/40 text-cyan-300 text-[10px] font-mono flex items-center gap-1 transition-all cursor-pointer"
+                                >
+                                  <Shirt className="w-2.5 h-2.5 text-cyan-400" />
+                                  <span className="truncate max-w-[120px]">{activeOutfit?.name || 'Default Outfit'}</span>
+                                </button>
+                              )}
+
+                              {section.isDialogue && (
+                                <span className="text-[9px] font-mono text-amber-400 bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                  Dialogue
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => setExpandedOverrideIndex(isExpanded ? null : idx)}
+                            className="p-1 rounded text-zinc-400 hover:text-cyan-300 transition-colors cursor-pointer shrink-0"
+                            title="Tune scene character & wardrobe"
+                          >
+                            <SlidersHorizontal className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        {/* Expanded Override Popover / Form */}
+                        {isExpanded && (
+                          <div className="mt-2.5 pt-2.5 border-t border-zinc-800 space-y-2 animate-in fade-in duration-150">
+                            {/* 1. Character Dropdown */}
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-mono text-zinc-400 block">
+                                Assigned Character:
+                              </label>
+                              <select
+                                value={activeCharId || ''}
+                                onChange={(e) => handleOverrideScene(idx, e.target.value)}
+                                className="w-full bg-[#05070e] border border-zinc-700 rounded-lg px-2.5 py-1 text-xs text-white focus:outline-none focus:border-cyan-400 cursor-pointer"
+                              >
+                                <option value="">-- No Character (Environmental Shot) --</option>
+                                {characters.map((c) => (
+                                  <option key={c.id} value={c.id}>
+                                    {c.name} ({c.role}) - {c.tag}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            {/* 2. Dynamic Outfit Dropdown */}
+                            {activeChar && activeChar.outfits && activeChar.outfits.length > 0 && (
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-mono text-zinc-400 flex items-center justify-between">
+                                  <span className="flex items-center gap-1 text-amber-300 font-semibold">
+                                    <Shirt className="w-3 h-3 text-amber-400" />
+                                    Scene Outfit Wardrobe:
+                                  </span>
+                                  <span className="text-zinc-500 font-mono text-[9px]">
+                                    {activeChar.outfits.length} Outfits available
+                                  </span>
+                                </label>
+                                <select
+                                  value={activeOutfitId || activeChar.outfits[0]?.id}
+                                  onChange={(e) => handleOverrideScene(idx, activeChar.id, e.target.value)}
+                                  className="w-full bg-[#05070e] border border-zinc-700 rounded-lg px-2.5 py-1 text-xs text-amber-300 focus:outline-none focus:border-amber-400 cursor-pointer"
+                                >
+                                  {activeChar.outfits.map((outfit) => (
+                                    <option key={outfit.id} value={outfit.id}>
+                                      {outfit.name}
+                                    </option>
+                                  ))}
+                                </select>
+
+                                {activeOutfit && (
+                                  <div className="p-1.5 rounded-lg bg-[#050812] border border-zinc-800 text-[10px] text-zinc-400">
+                                    <strong className="text-zinc-300">Outfit Specs:</strong> {activeOutfit.description}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Voiceover actor indicator */}
+                            <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 pt-1">
+                              <span className="flex items-center gap-1">
+                                <Mic className="w-2.5 h-2.5 text-cyan-400" />
+                                <span>Voice: {activeChar?.assignedVoice || voiceActor}</span>
+                              </span>
+                              <button
+                                onClick={() => setExpandedOverrideIndex(null)}
+                                className="text-cyan-400 hover:underline cursor-pointer"
+                              >
+                                Done
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 2. Visual Style Dropdown */}

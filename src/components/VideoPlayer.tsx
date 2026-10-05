@@ -580,6 +580,23 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               </div>
             )}
 
+            {/* Top Left Live Character & Wardrobe HUD Badge */}
+            {showInfoHud && activeScene?.characterName && testingTransitionEffect === null && (
+              <div className="absolute top-4 left-4 bg-black/70 backdrop-blur-md px-3 py-1.5 rounded-lg border border-cyan-500/30 text-[11px] font-mono text-zinc-200 flex items-center gap-2 pointer-events-none shadow-lg">
+                <span
+                  className="w-2 h-2 rounded-full"
+                  style={{ backgroundColor: activeScene.characterAccent || '#00f0ff' }}
+                />
+                <span className="font-bold text-white">{activeScene.characterName}</span>
+                {activeScene.outfitName && (
+                  <>
+                    <span className="text-zinc-500">•</span>
+                    <span className="text-cyan-300">{activeScene.outfitName}</span>
+                  </>
+                )}
+              </div>
+            )}
+
             {/* Top Right Live Camera Motion Badge */}
             {showInfoHud && activeScene && (
               <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg border border-cyan-500/30 text-[11px] font-mono text-cyan-300 flex items-center gap-2 pointer-events-none">

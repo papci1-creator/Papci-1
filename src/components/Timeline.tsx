@@ -25,12 +25,15 @@ import {
   GripVertical,
   ChevronLeft,
   Camera,
+  Shirt,
+  Lock,
 } from 'lucide-react';
 import { Scene, TransitionEffect, CharacterProfile } from '../types';
 import { renderCinematicFrame } from '../utils/canvasRenderer';
 import { audioEngine } from '../utils/audioEngine';
 import { VOICE_ACTORS, TRANSITION_EFFECTS } from '../data/presets';
 import { CameraMotionPanel } from './CameraMotionPanel';
+import { compileUnifiedVideoPrompt } from '../utils/nlpParser';
 
 interface TimelineProps {
   scenes: Scene[];
@@ -135,6 +138,7 @@ export const Timeline: React.FC<TimelineProps> = ({
   const [bulkTransition, setBulkTransition] = useState<TransitionEffect>('Dissolve');
   const [bulkFeedback, setBulkFeedback] = useState<string | null>(null);
   const [openTuningIds, setOpenTuningIds] = useState<string[]>([]);
+  const [openWardrobeSceneId, setOpenWardrobeSceneId] = useState<string | null>(null);
 
   // Reorder scenes & auto-recalculate continuous chronological timestamps
   const handleReorder = (fromIndex: number, toIndex: number) => {
@@ -724,6 +728,193 @@ export const Timeline: React.FC<TimelineProps> = ({
                   </button>
                 </div>
               </div>
+
+              {/* Color-Coded Character & Dynamic Outfit Badges Bar */}
+              {(() => {
+                const linkedChar =
+                  characters.find((c) => c.id === scene.characterId) ||
+                  characters.find((c) => c.name.toLowerCase() === (scene.characterName || '').toLowerCase());
+                const activeOutfit =
+                  linkedChar?.outfits?.find((o) => o.id === scene.outfitId) ||
+                  linkedChar?.outfits?.find((o) => o.name === scene.outfitName) ||
+                  linkedChar?.outfits?.[0];
+
+                return (
+                  <div className="px-3 pt-2 flex items-center justify-between gap-1 text-[10px] font-mono relative">
+                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                      {/* Character Pill */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenWardrobeSceneId(openWardrobeSceneId === scene.id ? null : scene.id);
+                        }}
+                        className="px-2 py-0.5 rounded border text-[10px] font-mono flex items-center gap-1 transition-all cursor-pointer shrink-0"
+                        style={{
+                          borderColor: linkedChar ? `${linkedChar.colorAccent}80` : '#3f3f46',
+                          backgroundColor: linkedChar ? `${linkedChar.colorAccent}15` : '#18181b',
+                          color: linkedChar ? linkedChar.colorAccent : '#a1a1aa',
+                        }}
+                        title="Click to change character or wardrobe outfit"
+                      >
+                        <span
+                          className="w-1.5 h-1.5 rounded-full"
+                          style={{ backgroundColor: linkedChar?.colorAccent || '#71717a' }}
+                        />
+                        <span className="font-bold truncate max-w-[70px]">
+                          {linkedChar?.name || scene.characterName || 'No Cast'}
+                        </span>
+                      </button>
+
+                      {/* Matching Locked Outfit Badge */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenWardrobeSceneId(openWardrobeSceneId === scene.id ? null : scene.id);
+                        }}
+                        className="px-2 py-0.5 rounded border text-[10px] font-mono flex items-center gap-1 transition-all cursor-pointer truncate flex-1 min-w-0"
+                        style={{
+                          borderColor: linkedChar ? `${linkedChar.colorAccent}50` : '#00f0ff40',
+                          backgroundColor: linkedChar ? `${linkedChar.colorAccent}10` : '#00f0ff10',
+                          color: linkedChar ? linkedChar.colorAccent : '#00f0ff',
+                        }}
+                        title="Click to select wardrobe outfit for this scene"
+                      >
+                        <Shirt className="w-2.5 h-2.5 shrink-0" />
+                        <span className="truncate">{activeOutfit?.name || scene.outfitName || 'Signature Outfit'}</span>
+                      </button>
+                    </div>
+
+                    {/* Face Lock Tag */}
+                    {linkedChar && (
+                      <span
+                        className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-cyan-500/30 bg-cyan-950/40 text-cyan-400 flex items-center gap-0.5 shrink-0"
+                        title="Facial features reference lock active"
+                      >
+                        <Lock className="w-2.5 h-2.5 text-cyan-400" />
+                        <span>Locked</span>
+                      </span>
+                    )}
+
+                    {/* Wardrobe & Character Switcher Dropdown Popover */}
+                    {openWardrobeSceneId === scene.id && (
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        className="absolute left-3 right-3 top-full mt-1.5 bg-[#0a0f1d] border border-cyan-500/50 rounded-xl p-3 z-50 shadow-[0_10px_30px_rgba(0,0,0,0.9)] space-y-2.5 animate-in fade-in duration-150 backdrop-blur-md"
+                      >
+                        <div className="flex items-center justify-between text-xs font-bold text-white border-b border-zinc-800 pb-1.5">
+                          <span className="flex items-center gap-1.5 text-cyan-300">
+                            <Shirt className="w-3.5 h-3.5 text-cyan-400" />
+                            Scene #{scene.sceneNumber} Cast & Wardrobe
+                          </span>
+                          <button
+                            onClick={() => setOpenWardrobeSceneId(null)}
+                            className="text-zinc-400 hover:text-white cursor-pointer"
+                          >
+                            ✕
+                          </button>
+                        </div>
+
+                        {/* Character Selector */}
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-mono text-zinc-400 block">Character:</label>
+                          <select
+                            value={linkedChar?.id || ''}
+                            onChange={(e) => {
+                              const newCharId = e.target.value;
+                              const newChar = characters.find((c) => c.id === newCharId);
+                              const newOutfit = newChar?.outfits?.[0];
+                              const newPrompt = compileUnifiedVideoPrompt({
+                                storySentence: scene.voiceoverText,
+                                visualStyle: scene.visualStyle,
+                                videoGenerator: scene.videoGenerator,
+                                cameraMotion: scene.cameraMotion,
+                                character: newChar,
+                                outfit: newOutfit,
+                              });
+                              onUpdateScene(scene.id, {
+                                characterId: newChar?.id,
+                                characterName: newChar?.name,
+                                characterRole: newChar?.role,
+                                characterDescription: newChar?.description,
+                                characterAvatar: newChar?.imageUrl,
+                                characterAccent: newChar?.colorAccent,
+                                outfitId: newOutfit?.id,
+                                outfitName: newOutfit?.name,
+                                outfitDescription: newOutfit?.description,
+                                outfitImage: newOutfit?.imageUrl,
+                                voiceActor: newChar?.assignedVoice || scene.voiceActor,
+                                videoPrompt: newPrompt,
+                              });
+                            }}
+                            className="w-full bg-[#05070e] border border-zinc-700 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-cyan-400 cursor-pointer"
+                          >
+                            <option value="">-- No Character (Environmental Shot) --</option>
+                            {characters.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name} ({c.role})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Outfit Selector */}
+                        {linkedChar && linkedChar.outfits && linkedChar.outfits.length > 0 && (
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-mono text-zinc-400 block">
+                              Wardrobe Outfit for this Scene:
+                            </label>
+                            <select
+                              value={activeOutfit?.id || linkedChar.outfits[0].id}
+                              onChange={(e) => {
+                                const newOutfitId = e.target.value;
+                                const newOutfit = linkedChar.outfits.find((o) => o.id === newOutfitId);
+                                const newPrompt = compileUnifiedVideoPrompt({
+                                  storySentence: scene.voiceoverText,
+                                  visualStyle: scene.visualStyle,
+                                  videoGenerator: scene.videoGenerator,
+                                  cameraMotion: scene.cameraMotion,
+                                  character: linkedChar,
+                                  outfit: newOutfit,
+                                });
+                                onUpdateScene(scene.id, {
+                                  outfitId: newOutfit?.id,
+                                  outfitName: newOutfit?.name,
+                                  outfitDescription: newOutfit?.description,
+                                  outfitImage: newOutfit?.imageUrl,
+                                  videoPrompt: newPrompt,
+                                });
+                              }}
+                              className="w-full bg-[#05070e] border border-zinc-700 rounded-lg px-2 py-1 text-xs text-amber-300 focus:outline-none focus:border-amber-400 cursor-pointer"
+                            >
+                              {linkedChar.outfits.map((o) => (
+                                <option key={o.id} value={o.id}>
+                                  {o.name}
+                                </option>
+                              ))}
+                            </select>
+                            {activeOutfit && (
+                              <p className="text-[10px] text-zinc-400 line-clamp-2 italic pt-0.5">
+                                "{activeOutfit.description}"
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="pt-1 flex justify-end">
+                          <button
+                            onClick={() => setOpenWardrobeSceneId(null)}
+                            className="px-2.5 py-0.5 rounded bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-[10px] cursor-pointer"
+                          >
+                            Apply Wardrobe
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Scene Audio, Voice Actor & Transition Badges */}
               <div className="px-3 pt-2 flex items-center justify-between text-[10px] font-mono">

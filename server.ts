@@ -114,9 +114,14 @@ function generateFallbackScenes(
     const sceneNumber = idx + 1;
     const cameraMotion = getCameraMotionForStyle(idx);
     const matchedChar = findMatchingCharacter(text, characters, idx);
+    const matchedOutfit = (matchedChar?.outfits && Array.isArray(matchedChar.outfits))
+      ? matchedChar.outfits.find((o: any) => o.id === matchedChar.activeOutfitId) ||
+        matchedChar.outfits.find((o: any) => o.isDefault) ||
+        matchedChar.outfits[0]
+      : undefined;
 
     const characterInjection = matchedChar
-      ? `Featuring character: ${matchedChar.name} (${matchedChar.description}). Consistent character reference lock. `
+      ? `[CHARACTER: ${matchedChar.name}, ${matchedChar.role}] [FACE LOCK: ${matchedChar.faceDescription || matchedChar.description}] ${matchedOutfit ? `[OUTFIT: ${matchedOutfit.name} - ${matchedOutfit.description}] ` : ''}`
       : '';
 
     return {
@@ -127,7 +132,7 @@ function generateFallbackScenes(
       startTime,
       endTime: currentTime,
       voiceoverText: text,
-      videoPrompt: `Masterpiece cinematic 8k render, ${visualStyle} aesthetic, rendered with ${videoGenerator}. Camera Movement: ${cameraMotion}. ${characterInjection}${text}. Volumetric lighting, high dynamic range, octane render style, photorealistic depth and facial consistency.`,
+      videoPrompt: `Masterpiece cinematic 8k render, ${visualStyle} aesthetic, rendered with ${videoGenerator}. Camera Movement: ${cameraMotion}. ${characterInjection}${text}. Volumetric lighting, high dynamic range, photorealistic depth, character wardrobe and facial consistency.`,
       cameraMotion,
       soundFx: soundFxList[idx % soundFxList.length],
       visualStyle,
@@ -141,6 +146,10 @@ function generateFallbackScenes(
       characterDescription: matchedChar?.description,
       characterAvatar: matchedChar?.imageUrl,
       characterAccent: matchedChar?.colorAccent,
+      outfitId: matchedOutfit?.id,
+      outfitName: matchedOutfit?.name,
+      outfitDescription: matchedOutfit?.description,
+      outfitImage: matchedOutfit?.imageUrl,
       status: 'ready' as const,
       progress: 100,
       generationPhase: 'Render Ready (100%)',
@@ -328,8 +337,8 @@ app.post('/api/generate-storyboard', async (req: Request, res: Response) => {
   if (aiClient) {
     try {
       const characterBios = Array.isArray(characters) && characters.length > 0
-        ? `\nCharacter Roster (lock these specific physical descriptions into scenes whenever tagged with @Name or referenced):
-${characters.map((c: any) => `- ${c.name} (${c.tag}, ${c.role}): ${c.description} [Assigned Voice: ${c.assignedVoice}]`).join('\n')}`
+        ? `\nCharacter Roster & Wardrobe (lock these baseline physical features and specific outfits into scenes whenever referenced):
+${characters.map((c: any) => `- ${c.name} (${c.tag}, Role: ${c.role}): Face & Physical: ${c.faceDescription || c.description} [Assigned Voice: ${c.assignedVoice}] [Wardrobe Outfits: ${c.outfits?.map((o: any) => `"${o.name}": ${o.description}`).join(' | ') || 'Default'}]`).join('\n')}`
         : '';
 
       const prompt = `You are a world-class Hollywood film director and visual effects supervisor for an AI media pipeline using ${videoGenerator}.
@@ -354,10 +363,11 @@ Output a strictly valid JSON array of objects with the following schema for each
     "title": "Short evocative title (max 5 words)",
     "duration": 6,
     "voiceoverText": "Polished, spoken narration line for this scene (1 to 2 sentences)",
-    "videoPrompt": "Highly descriptive visual prompt for ${videoGenerator}: explicitly incorporate character facial features, attire, lighting, camera angle, subject actions, color palette, texture, lens (e.g. 35mm anamorphic), hyper-detailed, no text overlays",
+    "videoPrompt": "Highly descriptive visual prompt for ${videoGenerator}: explicitly incorporate character facial features, exact chosen outfit specs, lighting, camera angle, subject actions, color palette, texture, lens (e.g. 35mm anamorphic), hyper-detailed, no text overlays",
     "cameraMotion": "Specific cinematic camera move adhering to ${defaultCameraMovement}",
     "soundFx": "Atmospheric sound design cue (e.g., 'Distant thunder, wet tires, neon buzz')",
     "characterTag": "@Leo (or matching character tag if a character is featured in this scene)",
+    "outfitName": "Exact name of outfit worn by character in this scene (e.g. 'Astronaut Spacesuit' or 'Casual Streetwear Hoodie')",
     "visualTheme": {
       "mood": "e.g., 'Epic & Mysterious'",
       "primaryColor": "hex code e.g. #00f0ff",
@@ -401,9 +411,15 @@ Return ONLY the raw JSON array. No markdown formatting, no code block backticks.
             idx
           );
 
+          const matchedOutfit = (matchedChar?.outfits && Array.isArray(matchedChar.outfits))
+            ? matchedChar.outfits.find((o: any) => s.outfitName && o.name.toLowerCase().includes(s.outfitName.toLowerCase())) ||
+              matchedChar.outfits.find((o: any) => o.id === matchedChar.activeOutfitId) ||
+              matchedChar.outfits[0]
+            : undefined;
+
           let blendedPrompt = s.videoPrompt || `${visualStyle} scene showing ${story.slice(0, 100)}`;
           if (matchedChar && !blendedPrompt.includes(matchedChar.name)) {
-            blendedPrompt = `Featuring character ${matchedChar.name} (${matchedChar.description}). ${blendedPrompt}`;
+            blendedPrompt = `[CHARACTER: ${matchedChar.name}, ${matchedChar.role}] [FACE LOCK: ${matchedChar.faceDescription || matchedChar.description}] ${matchedOutfit ? `[OUTFIT: ${matchedOutfit.name} - ${matchedOutfit.description}] ` : ''}${blendedPrompt}`;
           }
 
           return {
@@ -434,6 +450,10 @@ Return ONLY the raw JSON array. No markdown formatting, no code block backticks.
             characterDescription: matchedChar?.description,
             characterAvatar: matchedChar?.imageUrl,
             characterAccent: matchedChar?.colorAccent,
+            outfitId: matchedOutfit?.id,
+            outfitName: matchedOutfit?.name,
+            outfitDescription: matchedOutfit?.description,
+            outfitImage: matchedOutfit?.imageUrl,
             status: 'ready',
             progress: 100,
             generationPhase: 'Render Ready (100%)',
@@ -516,6 +536,131 @@ Output a strictly valid JSON object:
     status: 'ready',
     progress: 100,
     generationPhase: 'Re-rendered via ' + videoGenerator,
+  });
+});
+
+// API: Backend NLP Parser to scan story text for characters, outfits, dialogue, and scenes
+app.post('/api/nlp-parse', (req: Request, res: Response) => {
+  const { story = '', characters = [], defaultVoice = 'Male Deep Narrator' } = req.body;
+
+  if (!story || typeof story !== 'string') {
+    res.status(400).json({ error: 'Valid story text string is required.' });
+    return;
+  }
+
+  const rawParagraphs = story
+    .split(/\n\s*\n/)
+    .map((p: string) => p.trim())
+    .filter(Boolean);
+
+  const sections: string[] = [];
+  rawParagraphs.forEach((para: string) => {
+    if (para.length > 200) {
+      const sentences = para.split(/(?<=[.!?])\s+(?=[A-Z@])/);
+      sentences.forEach((s: string) => {
+        const trimmed = s.trim();
+        if (trimmed.length > 0) sections.push(trimmed);
+      });
+    } else {
+      sections.push(para);
+    }
+  });
+
+  const parsedSections = sections.map((text: string, idx: number) => {
+    const textLower = text.toLowerCase();
+    const detected: any[] = [];
+
+    characters.forEach((char: any) => {
+      const namePattern = new RegExp(`\\b${char.name}\\b`, 'i');
+      const tagPattern = new RegExp(`${char.tag}\\b`, 'i');
+      if (tagPattern.test(text) || namePattern.test(text)) {
+        detected.push(char);
+      }
+    });
+
+    const primaryChar = detected[0] || null;
+    let chosenOutfit = null;
+
+    if (primaryChar && Array.isArray(primaryChar.outfits) && primaryChar.outfits.length > 0) {
+      for (const outfit of primaryChar.outfits) {
+        const outfitKeywords = outfit.name
+          .toLowerCase()
+          .split(/\s+/)
+          .filter((w: string) => w.length > 3);
+        const match = outfitKeywords.some((kw: string) => textLower.includes(kw));
+        if (match) {
+          chosenOutfit = outfit;
+          break;
+        }
+      }
+
+      if (!chosenOutfit) {
+        chosenOutfit =
+          primaryChar.outfits.find((o: any) => o.id === primaryChar.activeOutfitId) ||
+          primaryChar.outfits.find((o: any) => o.isDefault) ||
+          primaryChar.outfits[0];
+      }
+    }
+
+    const isDialogue = /["'“][^"'“”]+["'”]/.test(text) || /^[A-Z][a-z]+:\s*".+"/.test(text);
+    const suggestedVoice = primaryChar?.assignedVoice || defaultVoice;
+
+    return {
+      index: idx,
+      text,
+      detectedCharacters: detected,
+      primaryCharacter: primaryChar,
+      selectedOutfit: chosenOutfit,
+      isDialogue,
+      speakerName: primaryChar?.name || null,
+      suggestedVoiceActor: suggestedVoice,
+    };
+  });
+
+  res.json({ parsedSections });
+});
+
+// API: Generate Turnaround reference sheet for character face & wardrobe locking
+app.post('/api/characters/generate-turnaround', async (req: Request, res: Response) => {
+  const { character } = req.body;
+  if (!character) {
+    res.status(400).json({ error: 'Character data is required.' });
+    return;
+  }
+
+  const generatedSheet = {
+    frontAngleDescription: `Full frontal elevation of ${character.name}: ${character.faceDescription || character.description}`,
+    sideProfileDescription: `90° profile silhouette detailing head contour, ear telemetry, and collar neckline.`,
+    actionAngleDescription: `3/4 cinematic angle: Dynamic hero stance with volumetric edge lighting.`,
+    costumeColorPalette: [character.colorAccent || '#00f0ff', '#141d33', '#0a0d18', '#ffffff'],
+    keyAnatomyFeatures: [
+      'Locked facial landmarks from reference',
+      'Consistent silhouette and hair geometry',
+      'Unified wardrobe and lighting temperature',
+    ],
+    generatedAt: `Turnaround Engine v2.0 - ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+  };
+
+  res.json({ referenceSheet: generatedSheet });
+});
+
+// API: Master Export compilation endpoint for seamless video download
+app.post('/api/export-master', (req: Request, res: Response) => {
+  const { scenes = [], config = {} } = req.body;
+  const duration = scenes.reduce((acc: number, s: any) => acc + (s.duration || 6), 0);
+
+  res.json({
+    success: true,
+    message: 'Master video compilation prepared successfully.',
+    exportStats: {
+      totalScenes: scenes.length,
+      totalDurationSeconds: duration,
+      resolution: config.resolution || '1080p',
+      format: config.format || 'mp4',
+      fps: 30,
+      audioTracks: 2, // narration + ambient score
+      timestamp: new Date().toISOString(),
+    },
   });
 });
 

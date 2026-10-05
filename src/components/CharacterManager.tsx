@@ -5,17 +5,21 @@ import {
   Trash2,
   Upload,
   Sparkles,
-  FileImage,
-  Layers,
+  Shirt,
+  Lock,
+  Unlock,
   Check,
   Eye,
   Mic,
   Palette,
   ExternalLink,
-  Shield,
-  HelpCircle,
+  ChevronDown,
+  ChevronUp,
+  Image as ImageIcon,
+  Edit3,
+  X,
 } from 'lucide-react';
-import { CharacterProfile, CharacterRole, Scene } from '../types';
+import { CharacterProfile, CharacterRole, CharacterOutfit, Scene } from '../types';
 import { VOICE_ACTORS } from '../data/presets';
 
 interface CharacterManagerProps {
@@ -38,34 +42,58 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
   scenes,
 }) => {
   const [dragOverCharId, setDragOverCharId] = useState<string | null>(null);
-  const [generatingSheetId, setGeneratingSheetId] = useState<string | null>(null);
+  const [expandedWardrobeIds, setExpandedWardrobeIds] = useState<string[]>([]);
+  const [editingOutfitCharId, setEditingOutfitCharId] = useState<string | null>(null);
+  const [newOutfitName, setNewOutfitName] = useState('');
+  const [newOutfitDesc, setNewOutfitDesc] = useState('');
+  const [newOutfitImg, setNewOutfitImg] = useState('');
+
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
+  const outfitFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const toggleWardrobe = (charId: string) => {
+    setExpandedWardrobeIds((prev) =>
+      prev.includes(charId) ? prev.filter((id) => id !== charId) : [...prev, charId]
+    );
+  };
 
   const handleAddCharacter = () => {
     const count = characters.length + 1;
-    const colors = ['#00f0ff', '#ff007f', '#ffaa00', '#00ff88', '#b026ff'];
+    const colors = ['#00f0ff', '#ff007f', '#ffaa00', '#00ff88', '#b026ff', '#38bdf8'];
     const assignedColor = colors[(count - 1) % colors.length];
+
+    const defaultOutfit: CharacterOutfit = {
+      id: `outfit-${Date.now()}-1`,
+      name: `Outfit 1: Signature Hero Attire`,
+      description: `Tactical lightweight jacket with ${assignedColor} glowing accents, combat pants, and telemetry belt.`,
+      colorAccent: assignedColor,
+      isDefault: true,
+    };
 
     const newChar: CharacterProfile = {
       id: `char-${Date.now()}`,
-      name: `Hero ${count}`,
-      tag: `@Hero${count}`,
+      name: `Character ${count}`,
+      tag: `@Char${count}`,
       role: count === 1 ? 'Protagonist' : count === 2 ? 'Antagonist' : 'Supporting',
-      description: `Hero ${count}, 26-year-old sci-fi protagonist, athletic build, distinctive tactical jacket with glowing ${assignedColor} accents, sharp determined eyes.`,
+      description: `Character ${count}, athletic build, sharp features with signature ${assignedColor} aesthetic.`,
+      faceDescription: `Distinctive facial structure, sharp jawline, focused eyes, athletic build, clear complexion with subtle cyber-ports.`,
       assignedVoice: VOICE_ACTORS[(count - 1) % VOICE_ACTORS.length].category,
       colorAccent: assignedColor,
+      activeOutfitId: defaultOutfit.id,
+      outfits: [defaultOutfit],
       referenceSheet: {
-        frontAngleDescription: `Frontal view of Hero ${count} with athletic posture, sharp features and high-tech collar.`,
-        sideProfileDescription: `90° profile silhouette detailing jawline, ear communicator and collar trim.`,
-        actionAngleDescription: `Dynamic 3/4 hero action pose with cinematic lighting and cyan rim bleed.`,
+        frontAngleDescription: `Frontal elevation of Character ${count} with athletic posture and locked facial geometry.`,
+        sideProfileDescription: `90° profile silhouette detailing jawline contour and collar telemetry.`,
+        actionAngleDescription: `Dynamic 3/4 heroic angle with cinematic key lighting.`,
         costumeColorPalette: [assignedColor, '#141d33', '#0a0d18', '#ffffff'],
-        keyAnatomyFeatures: ['Sharp jawline', 'Tactical jacket', 'Telemetry collar'],
-        generatedAt: 'Turnaround Model v1.0',
+        keyAnatomyFeatures: ['Locked facial landmarks', 'Consistent jawline', 'Signature wardrobe specs'],
+        generatedAt: 'Master Character Reference Sheet v1.2',
       },
     };
 
     setCharacters((prev) => [...prev, newChar]);
     setActiveCharacterId(newChar.id);
+    setExpandedWardrobeIds((prev) => [...prev, newChar.id]);
   };
 
   const handleUpdateCharacter = (id: string, updates: Partial<CharacterProfile>) => {
@@ -73,7 +101,6 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
       prev.map((c) => {
         if (c.id === id) {
           const updated = { ...c, ...updates };
-          // If name changes, sync tag
           if (updates.name) {
             updated.tag = `@${updates.name.replace(/\s+/g, '')}`;
           }
@@ -93,7 +120,7 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
     }
   };
 
-  // Image Upload handler (File input or Drag-and-drop)
+  // Image upload for locking face
   const handleFileUpload = (id: string, file: File) => {
     if (!file.type.startsWith('image/')) return;
     const reader = new FileReader();
@@ -112,47 +139,68 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
     }
   };
 
-  // Generate Reference Sheet with animated loading state
-  const handleGenerateTurnaroundSheet = (char: CharacterProfile, e: React.MouseEvent) => {
+  // Outfit Management
+  const handleAddOutfit = (charId: string) => {
+    if (!newOutfitName.trim()) return;
+
+    const char = characters.find((c) => c.id === charId);
+    if (!char) return;
+
+    const outfitNum = (char.outfits?.length || 0) + 1;
+    const outfit: CharacterOutfit = {
+      id: `outfit-${Date.now()}`,
+      name: newOutfitName.trim(),
+      description: newOutfitDesc.trim() || `Custom wardrobe configuration #${outfitNum} for ${char.name}.`,
+      imageUrl: newOutfitImg || undefined,
+      colorAccent: char.colorAccent,
+      isDefault: false,
+    };
+
+    const updatedOutfits = [...(char.outfits || []), outfit];
+    handleUpdateCharacter(charId, { outfits: updatedOutfits });
+
+    setNewOutfitName('');
+    setNewOutfitDesc('');
+    setNewOutfitImg('');
+    setEditingOutfitCharId(null);
+  };
+
+  const handleDeleteOutfit = (charId: string, outfitId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setGeneratingSheetId(char.id);
+    const char = characters.find((c) => c.id === charId);
+    if (!char || (char.outfits?.length || 0) <= 1) return;
 
-    setTimeout(() => {
-      const updatedSheet = {
-        frontAngleDescription: `Full frontal elevation of ${char.name}: ${char.description}`,
-        sideProfileDescription: `90° profile silhouette detailing head curvature, shoulder breadth, and signature costume gear.`,
-        actionAngleDescription: `3/4 cinematic turnaround angle: Ready stance with directional lighting highlights.`,
-        costumeColorPalette: [char.colorAccent, '#121c2e', '#070a14', '#ffffff'],
-        keyAnatomyFeatures: [
-          'Facial structure locked from reference',
-          'Exact clothing specs',
-          'Directional lighting consistency',
-        ],
-        generatedAt: `Generated at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
-      };
+    const filtered = char.outfits.filter((o) => o.id !== outfitId);
+    const updates: Partial<CharacterProfile> = { outfits: filtered };
 
-      handleUpdateCharacter(char.id, { referenceSheet: updatedSheet });
-      setGeneratingSheetId(null);
-      onOpenTurnaround({ ...char, referenceSheet: updatedSheet });
-    }, 1000);
+    if (char.activeOutfitId === outfitId) {
+      updates.activeOutfitId = filtered[0]?.id;
+    }
+
+    handleUpdateCharacter(charId, updates);
+  };
+
+  const handleSetActiveOutfit = (charId: string, outfitId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    handleUpdateCharacter(charId, { activeOutfitId: outfitId });
   };
 
   return (
-    <div className="h-full flex flex-col bg-[#08090e] text-zinc-100 select-none overflow-hidden">
+    <div className="h-full flex flex-col bg-[#07090e] text-zinc-100 select-none overflow-hidden">
       {/* Top Header & Actions */}
-      <div className="p-4 border-b border-zinc-800/80 bg-[#0c101a] flex items-center justify-between">
+      <div className="p-3.5 border-b border-zinc-800/80 bg-[#0c101a] flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2">
             <Users className="w-4 h-4 text-cyan-400" />
             <h3 className="text-xs font-bold font-mono uppercase tracking-wider text-zinc-200">
-              Cast & Character References
+              Cast & Character Manager
             </h3>
             <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-500/30 font-bold">
-              {characters.length} Active
+              {characters.length} Active Cast
             </span>
           </div>
           <p className="text-[11px] text-zinc-400 mt-0.5">
-            Lock in facial features, wardrobe consistency & voice actor links
+            Lock baseline facial features & customize dynamic wardrobe outfits
           </p>
         </div>
 
@@ -161,7 +209,7 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
           className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs flex items-center gap-1.5 shadow-[0_0_12px_rgba(0,240,255,0.25)] transition-all cursor-pointer"
         >
           <Plus className="w-3.5 h-3.5" />
-          <span>Add Character</span>
+          <span>New Profile</span>
         </button>
       </div>
 
@@ -170,15 +218,15 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
         {characters.map((char) => {
           const isSelected = activeCharacterId === char.id;
           const isUsedInActiveScene = activeSceneCharacterId === char.id;
-          const scenesUsingThisChar = scenes.filter(
-            (s) => s.characterId === char.id || s.videoPrompt.toLowerCase().includes(char.name.toLowerCase())
-          );
+          const isWardrobeExpanded = expandedWardrobeIds.includes(char.id);
+          const outfitsCount = char.outfits?.length || 0;
+          const activeOutfit = char.outfits?.find((o) => o.id === char.activeOutfitId) || char.outfits?.[0];
 
           return (
             <div
               key={char.id}
               onClick={() => setActiveCharacterId(char.id)}
-              className={`rounded-xl border transition-all duration-200 overflow-hidden relative cursor-pointer ${
+              className={`rounded-2xl border transition-all duration-200 overflow-hidden relative cursor-pointer ${
                 isSelected
                   ? 'bg-[#0f1424] shadow-[0_0_20px_rgba(0,240,255,0.25)]'
                   : 'bg-[#090c14] hover:bg-[#0c101c] border-zinc-800/90'
@@ -191,7 +239,7 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
                   : undefined,
               }}
             >
-              {/* Active Indicator Band */}
+              {/* Active Indicator Top Accent Bar */}
               {isSelected && (
                 <div
                   className="h-1 w-full"
@@ -199,11 +247,11 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
                 />
               )}
 
-              <div className="p-4 space-y-3.5">
-                {/* Card Header: Avatar Thumbnail, Name, Role & Delete */}
+              <div className="p-4 space-y-4">
+                {/* 1. Header: Avatar/Face Lock Upload, Name, Role & Tag */}
                 <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3">
-                    {/* Drag-and-drop Image Reference Box */}
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    {/* Image Reference Upload Box to Lock in Facial Features */}
                     <div
                       onDragOver={(e) => {
                         e.preventDefault();
@@ -215,24 +263,31 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
                         e.stopPropagation();
                         fileInputRefs.current[char.id]?.click();
                       }}
-                      className={`w-16 h-16 rounded-xl border relative overflow-hidden group cursor-pointer shrink-0 transition-all ${
+                      className={`w-20 h-20 rounded-xl border relative overflow-hidden group cursor-pointer shrink-0 transition-all ${
                         dragOverCharId === char.id
                           ? 'border-cyan-400 bg-cyan-950/40 ring-2 ring-cyan-400'
-                          : 'border-zinc-750 bg-[#06080f]'
+                          : 'border-zinc-750 bg-[#05070d]'
                       }`}
                       style={{
                         borderColor: isSelected ? char.colorAccent : undefined,
-                        boxShadow: isSelected ? `0 0 12px ${char.colorAccent}40` : undefined,
+                        boxShadow: isSelected ? `0 0 14px ${char.colorAccent}35` : undefined,
                       }}
-                      title="Click or drag-and-drop an image reference"
+                      title="Upload or drop face reference image to lock facial features"
                     >
                       {char.imageUrl ? (
-                        <img
-                          src={char.imageUrl}
-                          alt={char.name}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                          referrerPolicy="no-referrer"
-                        />
+                        <>
+                          <img
+                            src={char.imageUrl}
+                            alt={char.name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                            referrerPolicy="no-referrer"
+                          />
+                          {/* Face Locked Badge */}
+                          <div className="absolute bottom-1 right-1 bg-black/80 backdrop-blur-xs px-1.5 py-0.5 rounded text-[8px] font-mono text-cyan-300 flex items-center gap-0.5 border border-cyan-500/40">
+                            <Lock className="w-2.5 h-2.5 text-cyan-400" />
+                            <span>Locked</span>
+                          </div>
+                        </>
                       ) : (
                         <div
                           className="w-full h-full flex flex-col items-center justify-center p-1 text-center"
@@ -241,21 +296,21 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
                           }}
                         >
                           <span
-                            className="font-mono font-bold text-base"
+                            className="font-mono font-bold text-lg"
                             style={{ color: char.colorAccent }}
                           >
                             {char.name.slice(0, 2).toUpperCase()}
                           </span>
-                          <span className="text-[9px] text-zinc-500 font-mono flex items-center gap-0.5 mt-0.5">
-                            <Upload className="w-2.5 h-2.5" />
-                            Drop
+                          <span className="text-[8px] text-zinc-400 font-mono flex items-center gap-0.5 mt-0.5">
+                            <Upload className="w-2.5 h-2.5 text-cyan-400" />
+                            Lock Face
                           </span>
                         </div>
                       )}
 
                       {/* Hover Overlay */}
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-[10px] text-cyan-300 font-mono">
-                        <Upload className="w-3.5 h-3.5" />
+                        <Upload className="w-4 h-4" />
                       </div>
 
                       <input
@@ -273,7 +328,7 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
                       />
                     </div>
 
-                    {/* Name, Tag & Role Input */}
+                    {/* Name, Role & Tag */}
                     <div className="space-y-1.5 flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <input
@@ -289,7 +344,7 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
                         </span>
                       </div>
 
-                      {/* Role Selector */}
+                      {/* Role Selector & Color Dot */}
                       <div className="flex items-center gap-2">
                         <select
                           value={char.role}
@@ -306,23 +361,42 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
                           <option value="Supporting">Supporting</option>
                         </select>
 
-                        {/* Accent Color Dot */}
                         <div
-                          className="w-3 h-3 rounded-full border border-white/20 shrink-0"
+                          className="w-3.5 h-3.5 rounded-full border border-white/20 shrink-0"
                           style={{ backgroundColor: char.colorAccent, boxShadow: `0 0 8px ${char.colorAccent}` }}
                           title={`Color Accent: ${char.colorAccent}`}
                         />
                       </div>
+
+                      {/* Active Outfit Quick Tag */}
+                      {activeOutfit && (
+                        <div className="text-[10px] font-mono text-cyan-300 flex items-center gap-1">
+                          <Shirt className="w-3 h-3 text-cyan-400" />
+                          <span className="truncate max-w-[150px]">{activeOutfit.name}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  {/* Actions & Delete Button */}
+                  {/* Actions: Turnaround & Delete */}
                   <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenTurnaround(char);
+                      }}
+                      title="View Multi-Angle Turnaround Reference Sheet"
+                      className="px-2 py-1 rounded bg-[#10192e] hover:bg-[#16223d] text-cyan-300 border border-cyan-500/30 text-[10px] font-mono flex items-center gap-1 transition-colors cursor-pointer"
+                    >
+                      <Sparkles className="w-3 h-3 text-cyan-400" />
+                      <span className="hidden sm:inline">Turnaround</span>
+                    </button>
+
                     {characters.length > 1 && (
                       <button
                         onClick={(e) => handleDeleteCharacter(char.id, e)}
                         title="Delete Profile"
-                        className="p-1.5 text-zinc-500 hover:text-rose-400 rounded-lg hover:bg-rose-500/10 transition-colors cursor-pointer"
+                        className="p-1 text-zinc-500 hover:text-rose-400 rounded-lg hover:bg-rose-500/10 transition-colors cursor-pointer"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -330,26 +404,196 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
                   </div>
                 </div>
 
-                {/* Text-based Physical Description */}
+                {/* 2. Baseline Face & Physical Features Description */}
                 <div className="space-y-1" onClick={(e) => e.stopPropagation()}>
                   <label className="text-[10px] font-mono text-zinc-400 flex items-center justify-between">
-                    <span>Physical Description & Facial Features:</span>
-                    <span className="text-zinc-500">{char.description.length} chars</span>
+                    <span className="flex items-center gap-1 text-zinc-300">
+                      <Lock className="w-3 h-3 text-cyan-400" />
+                      Baseline Face & Physical Description:
+                    </span>
+                    <span className="text-zinc-500 font-mono text-[9px]">Locks facial features</span>
                   </label>
                   <textarea
                     rows={2}
-                    value={char.description}
-                    onChange={(e) => handleUpdateCharacter(char.id, { description: e.target.value })}
+                    value={char.faceDescription || char.description}
+                    onChange={(e) =>
+                      handleUpdateCharacter(char.id, {
+                        faceDescription: e.target.value,
+                        description: e.target.value,
+                      })
+                    }
                     className="w-full bg-[#05070e] border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200 focus:outline-none focus:border-cyan-500/60 resize-none font-sans"
-                    placeholder="e.g. Leo, 25-year-old astronaut, short blonde hair, blue spacesuit, athletic build, determined blue eyes..."
+                    placeholder="e.g. 25-year-old astronaut, short blonde hair, square jawline, piercing blue eyes..."
                   />
                 </div>
 
-                {/* Voiceover Actor Linked to Character */}
-                <div className="flex items-center justify-between gap-2 text-[11px] pt-1 border-t border-zinc-850" onClick={(e) => e.stopPropagation()}>
+                {/* 3. Dynamic Outfit Wardrobe Sub-list */}
+                <div className="space-y-2 pt-2 border-t border-zinc-850" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-between">
+                    <button
+                      onClick={() => toggleWardrobe(char.id)}
+                      className="flex items-center gap-1.5 text-xs font-bold text-zinc-200 hover:text-cyan-300 transition-colors cursor-pointer"
+                    >
+                      <Shirt className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Dynamic Outfit Wardrobe ({outfitsCount})</span>
+                      {isWardrobeExpanded ? (
+                        <ChevronUp className="w-3 h-3 text-zinc-400" />
+                      ) : (
+                        <ChevronDown className="w-3 h-3 text-zinc-400" />
+                      )}
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setEditingOutfitCharId(char.id);
+                        setNewOutfitName(`Outfit ${outfitsCount + 1}: `);
+                        setNewOutfitDesc('');
+                      }}
+                      className="px-2 py-0.5 rounded text-[10px] font-mono bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1 transition-all cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3 text-amber-400" />
+                      <span>Add Outfit</span>
+                    </button>
+                  </div>
+
+                  {/* Wardrobe Items Sub-list */}
+                  {isWardrobeExpanded && (
+                    <div className="space-y-2 pt-1 animate-in fade-in duration-150">
+                      {char.outfits?.map((outfit) => {
+                        const isActive = (char.activeOutfitId || char.outfits[0]?.id) === outfit.id;
+
+                        return (
+                          <div
+                            key={outfit.id}
+                            className={`p-2.5 rounded-xl border transition-all flex items-start justify-between gap-2 ${
+                              isActive
+                                ? 'bg-[#0d1424] border-cyan-500/50 shadow-[0_0_10px_rgba(0,240,255,0.15)]'
+                                : 'bg-[#060810] border-zinc-800 hover:border-zinc-700'
+                            }`}
+                          >
+                            <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                              {/* Outfit Thumbnail */}
+                              {outfit.imageUrl ? (
+                                <img
+                                  src={outfit.imageUrl}
+                                  alt={outfit.name}
+                                  className="w-10 h-10 rounded-lg object-cover border border-zinc-700 shrink-0"
+                                  referrerPolicy="no-referrer"
+                                />
+                              ) : (
+                                <div className="w-10 h-10 rounded-lg bg-zinc-900 border border-zinc-750 flex items-center justify-center shrink-0 text-cyan-400">
+                                  <Shirt className="w-4 h-4" />
+                                </div>
+                              )}
+
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-bold text-white truncate font-sans">
+                                    {outfit.name}
+                                  </span>
+                                  {isActive && (
+                                    <span className="text-[9px] font-mono text-cyan-400 bg-cyan-950/60 px-1.5 py-0.2 rounded border border-cyan-500/40">
+                                      Active Scene Default
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[11px] text-zinc-400 line-clamp-2 mt-0.5">
+                                  {outfit.description}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Outfit Action Buttons */}
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                onClick={(e) => handleSetActiveOutfit(char.id, outfit.id, e)}
+                                title={isActive ? 'Active Outfit' : 'Set as Active Outfit'}
+                                className={`px-2 py-1 rounded text-[10px] font-mono border transition-all cursor-pointer ${
+                                  isActive
+                                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-bold'
+                                    : 'bg-zinc-850 hover:bg-zinc-800 text-zinc-400 border-zinc-700/60'
+                                }`}
+                              >
+                                {isActive ? 'Selected' : 'Use'}
+                              </button>
+
+                              {char.outfits.length > 1 && (
+                                <button
+                                  onClick={(e) => handleDeleteOutfit(char.id, outfit.id, e)}
+                                  title="Delete Outfit"
+                                  className="p-1 text-zinc-500 hover:text-rose-400 rounded transition-colors cursor-pointer"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {/* Add Outfit Drawer Modal/Box */}
+                      {editingOutfitCharId === char.id && (
+                        <div className="p-3 bg-[#0a0f1d] border border-amber-500/30 rounded-xl space-y-2 mt-2 animate-in fade-in duration-150">
+                          <div className="flex items-center justify-between text-xs font-bold text-amber-300">
+                            <span className="flex items-center gap-1.5">
+                              <Shirt className="w-3.5 h-3.5" />
+                              Define New Outfit for {char.name}
+                            </span>
+                            <button
+                              onClick={() => setEditingOutfitCharId(null)}
+                              className="text-zinc-500 hover:text-zinc-300"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          <input
+                            type="text"
+                            value={newOutfitName}
+                            onChange={(e) => setNewOutfitName(e.target.value)}
+                            placeholder="e.g. Outfit 2: Cyberpunk Casual Hoodie"
+                            className="w-full bg-[#060810] border border-zinc-750 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-400"
+                          />
+
+                          <textarea
+                            rows={2}
+                            value={newOutfitDesc}
+                            onChange={(e) => setNewOutfitDesc(e.target.value)}
+                            placeholder="Describe wardrobe fabrics, colors, equipment (e.g. Matte white pressurized EVA spacesuit with cyan conduits)..."
+                            className="w-full bg-[#060810] border border-zinc-750 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-amber-400 resize-none"
+                          />
+
+                          <div className="flex items-center justify-between pt-1">
+                            <input
+                              type="text"
+                              value={newOutfitImg}
+                              onChange={(e) => setNewOutfitImg(e.target.value)}
+                              placeholder="Optional image URL reference..."
+                              className="bg-[#060810] border border-zinc-750 rounded px-2 py-1 text-[11px] text-zinc-300 w-48 truncate focus:outline-none focus:border-amber-400"
+                            />
+
+                            <button
+                              onClick={() => handleAddOutfit(char.id)}
+                              disabled={!newOutfitName.trim()}
+                              className="px-3 py-1 rounded bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs shadow-[0_0_8px_rgba(255,170,0,0.3)] disabled:opacity-40 cursor-pointer"
+                            >
+                              Save Outfit
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* 4. Assigned AI Voice Actor for Dialogue */}
+                <div
+                  className="flex items-center justify-between gap-2 text-[11px] pt-2 border-t border-zinc-850"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <div className="flex items-center gap-1.5 text-zinc-400 font-mono text-[10px]">
                     <Mic className="w-3 h-3 text-cyan-400" />
-                    <span>Assigned Voice:</span>
+                    <span>Dialogue Voice:</span>
                   </div>
                   <select
                     value={char.assignedVoice}
@@ -358,66 +602,15 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
                   >
                     {VOICE_ACTORS.map((va) => (
                       <option key={va.id} value={va.category}>
-                        {va.name} ({va.category})
+                        {va.name} ({va.category.split(' ')[0]})
                       </option>
                     ))}
                   </select>
-                </div>
-
-                {/* Bottom Actions: Generate Reference Sheet & Scene Presence */}
-                <div className="pt-2 flex items-center justify-between border-t border-zinc-850 gap-2">
-                  <div className="flex items-center gap-1 text-[10px] font-mono text-zinc-400">
-                    <span
-                      className="w-2 h-2 rounded-full"
-                      style={{ backgroundColor: char.colorAccent }}
-                    />
-                    <span>
-                      {scenesUsingThisChar.length} Scene
-                      {scenesUsingThisChar.length === 1 ? '' : 's'} Linked
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onOpenTurnaround(char);
-                      }}
-                      className="px-2.5 py-1 rounded-md text-[11px] font-mono text-zinc-300 hover:text-white bg-[#141928] hover:bg-[#1a2238] border border-zinc-700 transition-colors cursor-pointer flex items-center gap-1"
-                    >
-                      <Eye className="w-3 h-3 text-cyan-400" />
-                      <span>View Sheet</span>
-                    </button>
-
-                    <button
-                      onClick={(e) => handleGenerateTurnaroundSheet(char, e)}
-                      disabled={generatingSheetId === char.id}
-                      className="px-2.5 py-1 rounded-md text-[11px] font-mono font-bold bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 hover:border-cyan-400 flex items-center gap-1 transition-all cursor-pointer shadow-[0_0_8px_rgba(0,240,255,0.15)] disabled:opacity-50"
-                    >
-                      <Sparkles
-                        className={`w-3 h-3 text-cyan-400 ${
-                          generatingSheetId === char.id ? 'animate-spin' : ''
-                        }`}
-                      />
-                      <span>
-                        {generatingSheetId === char.id ? 'Generating...' : 'Generate Reference Sheet'}
-                      </span>
-                    </button>
-                  </div>
                 </div>
               </div>
             </div>
           );
         })}
-      </div>
-
-      {/* Bottom Character Consistency Info Tip */}
-      <div className="p-3 border-t border-zinc-800/80 bg-[#070910] text-[10px] font-mono text-zinc-400 flex items-center justify-between">
-        <span className="flex items-center gap-1.5">
-          <Shield className="w-3 h-3 text-cyan-400" />
-          Tag characters in your script with <code className="text-cyan-300 font-bold">@Name</code>
-        </span>
-        <span className="text-zinc-500">Runway · Luma · Sora Multi-Model Sync</span>
       </div>
     </div>
   );

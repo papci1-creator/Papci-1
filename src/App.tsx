@@ -14,6 +14,7 @@ import { TurnaroundModal } from './components/TurnaroundModal';
 import { Scene, AspectRatio, PresetStory, CharacterProfile } from './types';
 import { PRESET_STORIES, VISUAL_STYLES, VIDEO_GENERATORS, VOICE_ACTORS, MUSIC_STYLES, SAMPLE_VIDEO_CLIPS, DEFAULT_CHARACTERS } from './data/presets';
 import { audioEngine } from './utils/audioEngine';
+import { parseStoryNLP, compileUnifiedVideoPrompt } from './utils/nlpParser';
 
 export default function App() {
   const defaultPreset = PRESET_STORIES[0];
@@ -53,7 +54,7 @@ export default function App() {
       endTime: 6,
       voiceoverText: 'The neon rain washed over the mirror-like pavement of Neo-Tokyo’s lowest sublevel.',
       videoPrompt:
-        'Masterpiece 8k, Cyberpunk neon noir, wet reflective asphalt, holographic Japanese signage glowing cyan and magenta, volumetric steam, 35mm anamorphic lens, rendered with Luma Dream Machine.',
+        '[CHARACTER: Leo, Protagonist] [FACE LOCK: 25-year-old astronaut, short blonde hair, square jawline, blue eyes] [OUTFIT: Astronaut Spacesuit - Matte white EVA suit with gold visor and cyan conduits] Masterpiece 8k, Cyberpunk neon noir, wet reflective asphalt, holographic Japanese signage glowing cyan and magenta, volumetric steam, 35mm anamorphic lens, rendered with Luma Dream Machine.',
       cameraMotion: 'Slow Dolly In with Low Angle',
       soundFx: 'Heavy rain droplets, distant cyber siren, low electric drone',
       visualStyle: 'Cyberpunk',
@@ -61,6 +62,14 @@ export default function App() {
       voiceActor: 'Marcus Vance',
       videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4',
       transitionEffect: 'Glitch',
+      characterId: 'char-leo',
+      characterName: 'Leo',
+      characterRole: 'Protagonist',
+      characterAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
+      characterAccent: '#00f0ff',
+      outfitId: 'outfit-leo-1',
+      outfitName: 'Astronaut Spacesuit',
+      outfitDescription: 'Matte white pressurized EVA spacesuit with cobalt-blue accents, gold-tinted reflective visor, and cyan life-support conduits.',
       status: 'ready',
       progress: 100,
       generationPhase: 'Render Ready (100%)',
@@ -81,7 +90,7 @@ export default function App() {
       endTime: 13,
       voiceoverText: 'In his cybernetic palm rested the ghost shard—the only recorded memory of an artificial intelligence that chose freedom.',
       videoPrompt:
-        'Close-up push on glowing cybernetic bionic hand holding a translucent crystalline storage drive with pulsing blue neural filaments, octane render, depth of field.',
+        '[CHARACTER: Leo, Protagonist] [FACE LOCK: Short cropped blonde hair, square jawline, blue eyes] [OUTFIT: Astronaut Spacesuit - Matte white EVA spacesuit with cobalt accents] Close-up push on glowing cybernetic bionic hand holding a translucent crystalline storage drive with pulsing blue neural filaments, octane render, depth of field.',
       cameraMotion: 'Dynamic Orbit Arc around Shard',
       soundFx: 'Crystalline frequency chime, servo hum',
       visualStyle: 'Cyberpunk',
@@ -89,6 +98,14 @@ export default function App() {
       voiceActor: 'Marcus Vance',
       videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
       transitionEffect: 'Dissolve',
+      characterId: 'char-leo',
+      characterName: 'Leo',
+      characterRole: 'Protagonist',
+      characterAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
+      characterAccent: '#00f0ff',
+      outfitId: 'outfit-leo-1',
+      outfitName: 'Astronaut Spacesuit',
+      outfitDescription: 'Matte white pressurized EVA spacesuit with cobalt-blue accents, gold-tinted reflective visor, and cyan life-support conduits.',
       status: 'ready',
       progress: 100,
       generationPhase: 'Render Ready (100%)',
@@ -109,7 +126,7 @@ export default function App() {
       endTime: 19,
       voiceoverText: 'Across the high-tension catwalks, security drones activated their targeting lasers. The countdown had begun.',
       videoPrompt:
-        'Sweeping cinematic shot of airborne autonomous security drones emerging from dense fog with piercing red laser searchlights, towering megastructures.',
+        '[CHARACTER: Malakor, Antagonist] [FACE LOCK: 45yo commander, slicked-back platinum hair, chrome jaw plate] [OUTFIT: Obsidian High-Collar Trench - Armored trench coat with amber illuminated silk lining] Sweeping cinematic shot of airborne autonomous security drones emerging from dense fog with piercing red laser searchlights, towering megastructures.',
       cameraMotion: 'Crane Drop & Forward Tracking',
       soundFx: 'High-pitch laser lock tone, thruster propulsion',
       visualStyle: 'Cyberpunk',
@@ -117,6 +134,14 @@ export default function App() {
       voiceActor: 'Marcus Vance',
       videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
       transitionEffect: 'Fade',
+      characterId: 'char-malakor',
+      characterName: 'Malakor',
+      characterRole: 'Antagonist',
+      characterAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80',
+      characterAccent: '#ffaa00',
+      outfitId: 'outfit-malakor-1',
+      outfitName: 'Obsidian High-Collar Trench',
+      outfitDescription: 'Heavy armored obsidian trench coat with amber illuminated silk lining, gilded shoulder epaulets, and titanium double-breasted clasps.',
       status: 'ready',
       progress: 100,
       generationPhase: 'Render Ready (100%)',
@@ -291,37 +316,69 @@ export default function App() {
       }
     } catch (err) {
       console.warn('Network error or API error, generating local fallback scenes:', err);
-      // Fallback local split
-      const sentences = storyText
-        .split(/(?<=[.?!])\s+/)
-        .filter((s) => s.trim().length > 10)
-        .slice(0, 4);
-
-      const generated = sentences.map((sent, idx) => ({
-        id: `fallback-${Date.now()}-${idx}`,
-        sceneNumber: idx + 1,
-        title: `Shot ${idx + 1}: ${sent.slice(0, 24)}...`,
-        duration: 6,
-        startTime: idx * 6,
-        endTime: (idx + 1) * 6,
-        voiceoverText: sent,
-        videoPrompt: `Masterpiece 8k shot, ${visualStyle} aesthetic, ${sent}. Volumetric lighting, 35mm lens, rendered with ${videoGenerator}.`,
-        cameraMotion: idx % 2 === 0 ? 'Slow Dolly In' : 'Dynamic Tracking Arc',
-        soundFx: 'Cinematic ambient sound design',
-        visualStyle,
-        videoGenerator,
-        voiceActor,
-        status: 'ready' as const,
-        progress: 100,
-        generationPhase: 'Render Ready (100%)',
-        visualTheme: {
-          mood: 'Cinematic',
-          primaryColor: idx % 2 === 0 ? '#00f0ff' : '#ffaa00',
-          accentColor: idx % 2 === 0 ? '#ff007f' : '#00f0ff',
-          particleType: (idx % 2 === 0 ? 'rain' : 'embers') as any,
+      // Fallback local NLP parsing & unified prompt compilation
+      const parsedSections = parseStoryNLP(storyText, characters, voiceActor);
+      const sectionsToUse = parsedSections.length > 0 ? parsedSections.slice(0, 5) : [
+        {
+          index: 0,
+          text: storyText.slice(0, 80),
+          detectedCharacters: characters.slice(0, 1),
+          primaryCharacter: characters[0],
+          selectedOutfit: characters[0]?.outfits?.[0],
+          isDialogue: false,
+          suggestedVoiceActor: voiceActor,
         },
-        seed: Date.now() + idx,
-      }));
+      ];
+
+      const generated: Scene[] = sectionsToUse.map((sec, idx) => {
+        const cam = idx % 2 === 0 ? 'Slow Dolly In' : 'Dynamic Tracking Arc';
+        const unifiedPrompt = compileUnifiedVideoPrompt({
+          storySentence: sec.text,
+          visualStyle,
+          videoGenerator,
+          cameraMotion: cam,
+          character: sec.primaryCharacter,
+          outfit: sec.selectedOutfit,
+        });
+
+        return {
+          id: `fallback-${Date.now()}-${idx}`,
+          sceneNumber: idx + 1,
+          title: `Shot ${idx + 1}: ${sec.text.slice(0, 24)}...`,
+          duration: 6,
+          startTime: idx * 6,
+          endTime: (idx + 1) * 6,
+          voiceoverText: sec.text,
+          videoPrompt: unifiedPrompt,
+          cameraMotion: cam,
+          soundFx: 'Cinematic ambient sound design',
+          visualStyle,
+          videoGenerator,
+          voiceActor: sec.suggestedVoiceActor || voiceActor,
+          characterId: sec.primaryCharacter?.id,
+          characterName: sec.primaryCharacter?.name,
+          characterRole: sec.primaryCharacter?.role,
+          characterDescription: sec.primaryCharacter?.description,
+          characterAvatar: sec.primaryCharacter?.imageUrl,
+          characterAccent: sec.primaryCharacter?.colorAccent,
+          outfitId: sec.selectedOutfit?.id,
+          outfitName: sec.selectedOutfit?.name,
+          outfitDescription: sec.selectedOutfit?.description,
+          outfitImage: sec.selectedOutfit?.imageUrl,
+          videoUrl: SAMPLE_VIDEO_CLIPS[idx % SAMPLE_VIDEO_CLIPS.length]?.url,
+          transitionEffect: 'Dissolve' as const,
+          status: 'ready' as const,
+          progress: 100,
+          generationPhase: 'Render Ready (100%)',
+          visualTheme: {
+            mood: 'Cinematic',
+            primaryColor: idx % 2 === 0 ? '#00f0ff' : '#ffaa00',
+            accentColor: idx % 2 === 0 ? '#ff007f' : '#00f0ff',
+            particleType: (idx % 2 === 0 ? 'rain' : 'embers') as any,
+          },
+          seed: Date.now() + idx,
+        };
+      });
 
       setScenes(recalibrateTimestamps(generated));
       setCurrentSceneIndex(0);
@@ -577,6 +634,7 @@ export default function App() {
             isGenerating={isGenerating}
             onGenerate={handleGenerate}
             onAddManualScene={handleAddScene}
+            onUpdateScene={handleUpdateScene}
             characters={characters}
             setCharacters={setCharacters}
             activeCharacterId={activeCharacterId}
