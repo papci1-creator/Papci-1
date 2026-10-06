@@ -27,6 +27,8 @@ import {
   Camera,
   Shirt,
   Lock,
+  Pencil,
+  Edit3,
 } from 'lucide-react';
 import { Scene, TransitionEffect, CharacterProfile } from '../types';
 import { renderCinematicFrame } from '../utils/canvasRenderer';
@@ -139,6 +141,43 @@ export const Timeline: React.FC<TimelineProps> = ({
   const [bulkFeedback, setBulkFeedback] = useState<string | null>(null);
   const [openTuningIds, setOpenTuningIds] = useState<string[]>([]);
   const [openWardrobeSceneId, setOpenWardrobeSceneId] = useState<string | null>(null);
+
+  // Inline Narration Text Editor State
+  const [editingNarrationSceneId, setEditingNarrationSceneId] = useState<string | null>(null);
+  const [inlineEditText, setInlineEditText] = useState<string>('');
+  const [savedNarrationSceneId, setSavedNarrationSceneId] = useState<string | null>(null);
+
+  const handleStartInlineEdit = (scene: Scene) => {
+    setEditingNarrationSceneId(scene.id);
+    setInlineEditText(scene.voiceoverText || '');
+  };
+
+  const handleSaveInlineEdit = (sceneId: string) => {
+    onUpdateScene(sceneId, { voiceoverText: inlineEditText.trim() });
+    setEditingNarrationSceneId(null);
+    setSavedNarrationSceneId(sceneId);
+    setTimeout(() => {
+      setSavedNarrationSceneId((prev) => (prev === sceneId ? null : prev));
+    }, 2500);
+  };
+
+  const handleCancelInlineEdit = () => {
+    setEditingNarrationSceneId(null);
+    setInlineEditText('');
+  };
+
+  const handleInlineKeyDown = (
+    e: React.KeyboardEvent<HTMLTextAreaElement>,
+    sceneId: string
+  ) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      handleSaveInlineEdit(sceneId);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      handleCancelInlineEdit();
+    }
+  };
 
   // Reorder scenes & auto-recalculate continuous chronological timestamps
   const handleReorder = (fromIndex: number, toIndex: number) => {
@@ -255,16 +294,19 @@ export const Timeline: React.FC<TimelineProps> = ({
     );
   };
 
-  const handlePreviewVoice = (scene: Scene) => {
+  const handlePreviewVoice = (scene: Scene, customText?: string) => {
     if (previewingVoiceId === scene.id) {
       audioEngine.stopNarration();
       setPreviewingVoiceId(null);
       return;
     }
 
+    const textToSpeak = customText !== undefined ? customText : scene.voiceoverText;
+    if (!textToSpeak.trim()) return;
+
     setPreviewingVoiceId(scene.id);
     audioEngine.speakNarration(
-      scene.voiceoverText,
+      textToSpeak,
       scene.voiceActor,
       () => setPreviewingVoiceId(scene.id),
       () => setPreviewingVoiceId(null),
@@ -1021,12 +1063,17 @@ export const Timeline: React.FC<TimelineProps> = ({
                   </div>
                 </div>
 
-                {/* 3. Editable Voiceover Script Box & Delivery Tuning */}
+                {/* 3. Inline Editable Voiceover Script Box & Delivery Tuning */}
                 <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-between text-[10px] text-zinc-400 font-medium">
                     <span className="flex items-center gap-1">
                       <Mic className="w-3 h-3 text-cyan-400" />
-                      Voiceover Narration Script
+                      <span>Voiceover Narration</span>
+                      {savedNarrationSceneId === scene.id && (
+                        <span className="text-[9px] font-mono text-emerald-400 bg-emerald-950/60 px-1.5 py-0.2 rounded border border-emerald-500/30 animate-pulse flex items-center gap-0.5">
+                          <Check className="w-2.5 h-2.5" /> Saved
+                        </span>
+                      )}
                     </span>
                     <div className="flex items-center gap-2">
                       <button
@@ -1042,25 +1089,125 @@ export const Timeline: React.FC<TimelineProps> = ({
                         <span>Tune Delivery</span>
                       </button>
                       <button
-                        onClick={() => handlePreviewVoice(scene)}
+                        onClick={() =>
+                          handlePreviewVoice(
+                            scene,
+                            editingNarrationSceneId === scene.id ? inlineEditText : undefined
+                          )
+                        }
                         className={`text-[10px] flex items-center gap-1 px-1.5 py-0.5 rounded cursor-pointer transition-colors ${
                           previewingVoiceId === scene.id
-                            ? 'bg-rose-500/20 text-rose-300'
+                            ? 'bg-rose-500/20 text-rose-300 font-bold'
                             : 'hover:text-cyan-300 text-zinc-400'
                         }`}
+                        title="Audition spoken narration with assigned voice"
                       >
                         <Play className="w-2.5 h-2.5" />
                         {previewingVoiceId === scene.id ? 'Playing' : 'Listen'}
                       </button>
                     </div>
                   </div>
-                  <textarea
-                    value={scene.voiceoverText}
-                    onChange={(e) => onUpdateScene(scene.id, { voiceoverText: e.target.value })}
-                    rows={2}
-                    className="w-full bg-[#07090f] border border-zinc-800 rounded-lg p-2 text-xs text-zinc-200 focus:outline-none focus:border-cyan-500/60 resize-none font-sans"
-                    placeholder="Enter spoken narration for this scene..."
-                  />
+
+                  {editingNarrationSceneId === scene.id ? (
+                    /* Active Inline Editor */
+                    <div className="p-2 rounded-lg bg-[#050811] border border-cyan-500/70 ring-2 ring-cyan-500/20 shadow-[0_0_15px_rgba(0,240,255,0.12)] space-y-2 animate-in fade-in duration-150">
+                      <textarea
+                        value={inlineEditText}
+                        onChange={(e) => setInlineEditText(e.target.value)}
+                        onKeyDown={(e) => handleInlineKeyDown(e, scene.id)}
+                        autoFocus
+                        rows={3}
+                        className="w-full bg-transparent border-0 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none resize-none font-sans leading-relaxed"
+                        placeholder="Type spoken dialogue or voiceover narration..."
+                      />
+
+                      <div className="flex items-center justify-between pt-1 border-t border-zinc-800/80 text-[10px]">
+                        {/* Word count & speech duration badge */}
+                        <div className="flex items-center gap-1.5 text-zinc-400 font-mono">
+                          {(() => {
+                            const words = inlineEditText.trim()
+                              ? inlineEditText.trim().split(/\s+/).length
+                              : 0;
+                            const estSecs =
+                              words > 0
+                                ? ((words / (135 * (scene.voiceRate || 1.0))) * 60).toFixed(1)
+                                : '0';
+                            return (
+                              <>
+                                <span className="text-cyan-300 font-semibold">{words} words</span>
+                                <span>·</span>
+                                <span className="text-zinc-300">~{estSecs}s</span>
+                                <span className="text-[9px] text-amber-400/90 font-mono bg-amber-950/40 px-1 py-0.2 rounded border border-amber-500/20">
+                                  Auto-Ducked
+                                </span>
+                              </>
+                            );
+                          })()}
+                        </div>
+
+                        {/* Editor Action Buttons */}
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={handleCancelInlineEdit}
+                            className="px-2 py-0.5 rounded text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors cursor-pointer"
+                            title="Cancel editing (Esc)"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={() => handleSaveInlineEdit(scene.id)}
+                            className="px-2.5 py-0.5 rounded bg-cyan-500 hover:bg-cyan-400 text-black font-bold flex items-center gap-1 shadow-[0_0_8px_rgba(0,240,255,0.3)] transition-all cursor-pointer"
+                            title="Save narration (Ctrl+Enter)"
+                          >
+                            <Check className="w-3 h-3" />
+                            <span>Save</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Display Mode with Click-to-Edit Interaction */
+                    <div
+                      onClick={() => handleStartInlineEdit(scene)}
+                      className="group/narration relative p-2.5 rounded-lg border border-zinc-800 bg-[#07090f] hover:border-cyan-500/50 hover:bg-[#0a0e1c] transition-all cursor-text min-h-[58px] flex flex-col justify-between"
+                      title="Click text to edit voiceover inline"
+                    >
+                      {scene.voiceoverText?.trim() ? (
+                        <p className="text-xs text-zinc-200 font-sans leading-relaxed line-clamp-3 select-none">
+                          <span className="text-cyan-400/70 font-serif mr-1">“</span>
+                          {scene.voiceoverText}
+                          <span className="text-cyan-400/70 font-serif ml-1">”</span>
+                        </p>
+                      ) : (
+                        <p className="text-xs text-zinc-500 italic select-none">
+                          Click to enter spoken narration for Scene #{scene.sceneNumber}...
+                        </p>
+                      )}
+
+                      {/* Bottom Footer Info & Hover Edit Indicator */}
+                      <div className="flex items-center justify-between mt-2 pt-1 border-t border-zinc-850/60 text-[9px] font-mono text-zinc-500">
+                        {(() => {
+                          const words = scene.voiceoverText?.trim()
+                            ? scene.voiceoverText.trim().split(/\s+/).length
+                            : 0;
+                          const estSecs =
+                            words > 0
+                              ? ((words / (135 * (scene.voiceRate || 1.0))) * 60).toFixed(1)
+                              : '0';
+                          return (
+                            <span className="text-zinc-400">
+                              {words > 0 ? `${words} words · ~${estSecs}s speech` : 'No audio'}
+                            </span>
+                          );
+                        })()}
+
+                        <span className="flex items-center gap-1 text-cyan-400 opacity-60 group-hover/narration:opacity-100 transition-opacity font-medium">
+                          <Pencil className="w-2.5 h-2.5" />
+                          <span>Click to edit</span>
+                        </span>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Pitch & Speed Delivery Sliders Drawer */}
                   {openTuningIds.includes(scene.id) && (

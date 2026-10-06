@@ -20,10 +20,11 @@ import {
   ChevronDown,
   Link,
   Check,
+  Mic,
 } from 'lucide-react';
 import { Scene, AspectRatio, TransitionEffect } from '../types';
 import { renderCinematicFrame } from '../utils/canvasRenderer';
-import { audioEngine } from '../utils/audioEngine';
+import { audioEngine, VoiceoverSegment } from '../utils/audioEngine';
 import { TRANSITION_EFFECTS, SAMPLE_VIDEO_CLIPS } from '../data/presets';
 
 interface VideoPlayerProps {
@@ -76,6 +77,29 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [isLoopMenuOpen, setIsLoopMenuOpen] = useState(false);
   const [customUrlInput, setCustomUrlInput] = useState('');
   const [showCustomUrlDialog, setShowCustomUrlDialog] = useState(false);
+
+  // Automated Audio Ducking UI & Scheduling State
+  const [isDucking, setIsDucking] = useState(audioEngine.getIsDuckingActive());
+  const [activeVoiceSegment, setActiveVoiceSegment] = useState<VoiceoverSegment | null>(
+    audioEngine.getActiveVoiceoverSegment()
+  );
+  const [showDuckingPopover, setShowDuckingPopover] = useState(false);
+  const [duckingConfig, setDuckingConfigState] = useState(audioEngine.getDuckingConfig());
+
+  // Automatically recalculate voiceover ducking schedule whenever scenes change
+  useEffect(() => {
+    const segments = audioEngine.calculateVoiceoverSegments(scenes);
+    audioEngine.setDuckingSchedule(segments);
+  }, [scenes]);
+
+  // Subscribe to real-time audio ducking state changes
+  useEffect(() => {
+    const unsubscribe = audioEngine.onDuckingStateChange((ducking, _gain, seg) => {
+      setIsDucking(ducking);
+      setActiveVoiceSegment(seg);
+    });
+    return unsubscribe;
+  }, []);
 
   const activeScene = scenes[currentSceneIndex] || scenes[0];
 
@@ -248,6 +272,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               );
             }
           }
+
+          // Evaluate automated audio ducking at the current timeline timestamp
+          audioEngine.updateDuckingAtTime(next);
+
           return next;
         });
       }, 50);
@@ -341,6 +369,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const handleScrub = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseFloat(e.target.value);
     setCurrentTime(val);
+    audioEngine.updateDuckingAtTime(val);
     const foundIdx = scenes.findIndex((s) => val >= s.startTime && val < s.endTime);
     if (foundIdx !== -1) {
       setCurrentSceneIndex(foundIdx);
@@ -471,6 +500,138 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               <span>{useLiveVideoPreview ? 'Live Loop (ON)' : 'Procedural'}</span>
             </button>
           )}
+
+          {/* Automated Audio Ducking Monitor Badge & Tuning Popover */}
+          <div className="relative">
+            <button
+              onClick={() => setShowDuckingPopover(!showDuckingPopover)}
+              className={`px-2 py-1 rounded-lg text-[10px] font-mono flex items-center gap-1.5 transition-all cursor-pointer border ${
+                isDucking
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-[0_0_12px_rgba(255,170,0,0.3)]'
+                  : 'bg-[#101420] text-zinc-400 hover:text-zinc-200 border-zinc-800'
+              }`}
+              title="Automated Audio Ducking: dynamically lowers background music during voiceover segments"
+            >
+              <Mic className={`w-3 h-3 ${isDucking ? 'text-amber-400 animate-bounce' : 'text-cyan-400'}`} />
+              <span className="font-bold">{isDucking ? 'VO Ducked' : 'Auto-Duck'}</span>
+              <span
+                className={`text-[9px] px-1 py-0.2 rounded font-bold ${
+                  isDucking ? 'bg-amber-400 text-black' : 'bg-zinc-800 text-zinc-400'
+                }`}
+              >
+                {isDucking ? '-13dB' : duckingConfig.enabled ? 'ON' : 'OFF'}
+              </span>
+            </button>
+
+            {/* Ducking Tuning Popover */}
+            {showDuckingPopover && (
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="absolute right-0 top-full mt-2 w-72 bg-[#0c101d] border border-cyan-500/40 rounded-xl p-3 shadow-[0_12px_36px_rgba(0,0,0,0.95)] z-50 space-y-3 backdrop-blur-md text-xs font-mono"
+              >
+                <div className="flex items-center justify-between pb-1.5 border-b border-zinc-800">
+                  <div className="flex items-center gap-1.5 text-cyan-300 font-bold">
+                    <Mic className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Automated Audio Ducking</span>
+                  </div>
+                  <button
+                    onClick={() => setShowDuckingPopover(false)}
+                    className="text-zinc-400 hover:text-white cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Status Card */}
+                <div className="p-2 rounded-lg bg-[#070912] border border-zinc-800 flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <div className="text-[10px] text-zinc-400">Current Status:</div>
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={`w-2 h-2 rounded-full ${
+                          isDucking ? 'bg-amber-400 animate-ping' : 'bg-emerald-400'
+                        }`}
+                      />
+                      <span className="text-white font-bold">
+                        {isDucking
+                          ? `Ducking Active (${activeVoiceSegment?.speaker || 'Voiceover'})`
+                          : 'Monitoring Timestamps'}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const updated = !duckingConfig.enabled;
+                      audioEngine.setDuckingConfig({ enabled: updated });
+                      setDuckingConfigState(audioEngine.getDuckingConfig());
+                    }}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-colors ${
+                      duckingConfig.enabled
+                        ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                        : 'bg-zinc-800 text-zinc-400'
+                    }`}
+                  >
+                    {duckingConfig.enabled ? 'ENABLED' : 'DISABLED'}
+                  </button>
+                </div>
+
+                {/* Ducking Depth Presets */}
+                <div className="space-y-1">
+                  <label className="text-[10px] text-zinc-400 block">Ducking Attenuation Depth:</label>
+                  <div className="grid grid-cols-3 gap-1">
+                    {[
+                      { label: 'Mild (-8dB)', val: 0.38 },
+                      { label: 'Standard (-13dB)', val: 0.22 },
+                      { label: 'Deep (-18dB)', val: 0.12 },
+                    ].map((preset) => {
+                      const isSelected = Math.abs(duckingConfig.duckingGain - preset.val) < 0.05;
+                      return (
+                        <button
+                          key={preset.label}
+                          onClick={() => {
+                            audioEngine.setDuckingConfig({ duckingGain: preset.val });
+                            setDuckingConfigState(audioEngine.getDuckingConfig());
+                          }}
+                          className={`p-1.5 rounded text-[9px] text-center transition-colors cursor-pointer border ${
+                            isSelected
+                              ? 'border-amber-400/80 bg-amber-950/30 text-amber-300 font-bold'
+                              : 'border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-zinc-200'
+                          }`}
+                        >
+                          {preset.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Attack & Release Speeds */}
+                <div className="grid grid-cols-2 gap-2 text-[10px] text-zinc-400 pt-1 border-t border-zinc-800/80">
+                  <div>
+                    <span className="block text-zinc-500">Attack Ramp:</span>
+                    <span className="text-zinc-300 font-bold">250ms (Smooth)</span>
+                  </div>
+                  <div>
+                    <span className="block text-zinc-500">Release Decay:</span>
+                    <span className="text-zinc-300 font-bold">600ms (Cinematic)</span>
+                  </div>
+                </div>
+
+                {/* Active Scene Voiceover Timing info */}
+                {activeScene?.voiceoverText && (
+                  <div className="p-2 rounded bg-cyan-950/20 border border-cyan-500/20 text-[10px] text-zinc-300 space-y-1">
+                    <div className="flex items-center justify-between text-cyan-400 font-bold">
+                      <span>Scene #{activeScene.sceneNumber} Voiceover</span>
+                      <span>{Math.round(activeScene.duration)}s Shot</span>
+                    </div>
+                    <p className="line-clamp-2 italic text-zinc-400 text-[9px]">
+                      "{activeScene.voiceoverText}"
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Aspect Ratio Buttons */}
           <div className="flex items-center gap-0.5 bg-[#101420] p-0.5 rounded-lg border border-zinc-800 text-[11px] font-mono">

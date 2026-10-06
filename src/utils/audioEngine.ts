@@ -101,35 +101,35 @@ class AudioEngine {
    * for each scene based on narrative word count and fine-tuned speech rate.
    */
   public calculateVoiceoverSegments(scenes: Scene[]): VoiceoverSegment[] {
-    return scenes
-      .map((scene) => {
-        const text = (scene.voiceoverText || '').trim();
-        if (!text) return null;
+    const segments: VoiceoverSegment[] = [];
+    for (const scene of scenes) {
+      const text = (scene.voiceoverText || '').trim();
+      if (!text) continue;
 
-        const words = text.split(/\s+/).length;
-        const rate = scene.voiceRate ?? 1.0;
-        // Standard voice actor delivery is ~135 words per minute
-        // Adjusted by speech rate multiplier
-        const estimatedDurationSecs = Math.max(
-          1.8,
-          Math.min(scene.duration - 0.25, (words / (135 * rate)) * 60)
-        );
+      const words = text.split(/\s+/).length;
+      const rate = scene.voiceRate ?? 1.0;
+      // Standard voice actor delivery is ~135 words per minute
+      // Adjusted by speech rate multiplier
+      const estimatedDurationSecs = Math.max(
+        1.8,
+        Math.min(scene.duration - 0.25, (words / (135 * rate)) * 60)
+      );
 
-        // Pre-roll delay of 0.25s at scene start gives a natural cinematic breath
-        const start = scene.startTime + 0.25;
-        const end = Math.min(scene.endTime, start + estimatedDurationSecs);
+      // Pre-roll delay of 0.25s at scene start gives a natural cinematic breath
+      const start = scene.startTime + 0.25;
+      const end = Math.min(scene.endTime, start + estimatedDurationSecs);
 
-        return {
-          id: scene.id,
-          sceneNumber: scene.sceneNumber,
-          startTime: start,
-          endTime: end,
-          duration: end - start,
-          text,
-          speaker: scene.characterName || scene.voiceActor,
-        };
-      })
-      .filter((s): s is VoiceoverSegment => s !== null);
+      segments.push({
+        id: scene.id,
+        sceneNumber: scene.sceneNumber,
+        startTime: start,
+        endTime: end,
+        duration: end - start,
+        text,
+        speaker: scene.characterName || scene.voiceActor,
+      });
+    }
+    return segments;
   }
 
   /**
