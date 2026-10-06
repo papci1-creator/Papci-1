@@ -125,6 +125,15 @@ function generateFallbackScenes(
       ? `[CHARACTER: ${matchedChar.name}, ${matchedChar.role}] [FACE LOCK: ${matchedChar.faceDescription || matchedChar.description}] ${matchedOutfit ? `[OUTFIT: ${matchedOutfit.name} - ${matchedOutfit.description}] ` : ''}`
       : '';
 
+    const sampleLocations = [
+      'Neo-Tokyo Lower Sublevel',
+      'High-Tech Quantum Vault',
+      'Megastructure Catwalks',
+      'Orbital Observation Deck',
+      'Crystalline Oasis Sanctuary',
+    ];
+    const sampleTimes = ['Night', 'Midnight', 'Golden Hour', 'Dusk', 'Dawn'];
+
     return {
       id: `scene-${Date.now()}-${idx + 1}`,
       sceneNumber,
@@ -133,6 +142,8 @@ function generateFallbackScenes(
       startTime,
       endTime: currentTime,
       voiceoverText: text,
+      sceneLocation: sampleLocations[idx % sampleLocations.length],
+      timeOfDay: sampleTimes[idx % sampleTimes.length],
       videoPrompt: `Masterpiece cinematic 8k render, ${visualStyle} aesthetic, rendered with ${videoGenerator}. Camera Movement: ${cameraMotion}. ${characterInjection}${text}. Volumetric lighting, high dynamic range, photorealistic depth, character wardrobe and facial consistency.`,
       cameraMotion,
       soundFx: soundFxList[idx % soundFxList.length],
@@ -362,6 +373,8 @@ Output a strictly valid JSON array of objects with the following schema for each
   {
     "sceneNumber": 1,
     "title": "Short evocative title (max 5 words)",
+    "sceneLocation": "Specific setting/location (e.g. 'Neo-Tokyo Lower Sublevel', 'High-Tech Archive Vault', 'Megastructure Catwalks', 'Orbital Station')",
+    "timeOfDay": "One of: 'Dawn', 'Day', 'Golden Hour', 'Dusk', 'Night', 'Midnight'",
     "duration": 6,
     "voiceoverText": "Polished, spoken narration line for this scene (1 to 2 sentences)",
     "videoPrompt": "Highly descriptive visual prompt for ${videoGenerator}: explicitly incorporate character facial features, exact chosen outfit specs, lighting, camera angle, subject actions, color palette, texture, lens (e.g. 35mm anamorphic), hyper-detailed, no text overlays",
@@ -431,6 +444,8 @@ Return ONLY the raw JSON array. No markdown formatting, no code block backticks.
             startTime,
             endTime: runningTime,
             voiceoverText: s.voiceoverText || story.slice(0, 80),
+            sceneLocation: s.sceneLocation || `Location ${idx + 1}`,
+            timeOfDay: s.timeOfDay || (['Night', 'Midnight', 'Golden Hour', 'Dusk', 'Dawn'][idx % 5]),
             videoPrompt: blendedPrompt,
             cameraMotion: s.cameraMotion || 'Cinematic Dolly Zoom',
             soundFx: s.soundFx || 'Ambient cinematic drone',

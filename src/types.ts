@@ -78,12 +78,16 @@ export interface Scene {
   outfitDescription?: string; // Detailed outfit specs
   outfitImage?: string; // Thumbnail reference for outfit
   detectedCharacters?: string[]; // Character tags/names auto-detected in this scene
+  sceneLocation?: string; // Location or environment (e.g. 'Neo-Tokyo Sublevel 4', 'Orbital Deck')
+  timeOfDay?: TimeOfDay | string; // Lighting & temporal setting (e.g. 'Night', 'Golden Hour', 'Dawn')
   status: 'queued' | 'rendering' | 'ready' | 'error';
   progress: number;
   generationPhase: string;
   visualTheme: VisualTheme;
   seed: number;
 }
+
+export type TimeOfDay = 'Dawn' | 'Day' | 'Golden Hour' | 'Dusk' | 'Night' | 'Midnight';
 
 export type AspectRatio = '16:9' | '9:16' | '2.39:1';
 

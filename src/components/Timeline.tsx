@@ -29,8 +29,13 @@ import {
   Lock,
   Pencil,
   Edit3,
+  MapPin,
+  Sun,
+  Moon,
+  Sunrise,
+  Sunset,
 } from 'lucide-react';
-import { Scene, TransitionEffect, CharacterProfile } from '../types';
+import { Scene, TransitionEffect, CharacterProfile, TimeOfDay } from '../types';
 import { renderCinematicFrame } from '../utils/canvasRenderer';
 import { audioEngine } from '../utils/audioEngine';
 import { VOICE_ACTORS, TRANSITION_EFFECTS } from '../data/presets';
@@ -54,6 +59,59 @@ interface TimelineProps {
   characters?: CharacterProfile[];
   onOpenTurnaround?: (char: CharacterProfile) => void;
 }
+
+export const TIME_OF_DAY_OPTIONS: {
+  id: TimeOfDay;
+  label: string;
+  color: string;
+  bg: string;
+  border: string;
+}[] = [
+  { id: 'Dawn', label: 'Dawn', color: 'text-rose-300', bg: 'bg-rose-950/40', border: 'border-rose-500/30' },
+  { id: 'Day', label: 'Day', color: 'text-sky-300', bg: 'bg-sky-950/40', border: 'border-sky-500/30' },
+  { id: 'Golden Hour', label: 'Golden Hour', color: 'text-amber-300', bg: 'bg-amber-950/40', border: 'border-amber-500/30' },
+  { id: 'Dusk', label: 'Dusk', color: 'text-orange-300', bg: 'bg-orange-950/40', border: 'border-orange-500/30' },
+  { id: 'Night', label: 'Night', color: 'text-indigo-300', bg: 'bg-indigo-950/40', border: 'border-indigo-500/30' },
+  { id: 'Midnight', label: 'Midnight', color: 'text-purple-300', bg: 'bg-purple-950/40', border: 'border-purple-500/30' },
+];
+
+export const renderTimeOfDayIcon = (time?: string) => {
+  switch (time) {
+    case 'Dawn':
+      return <Sunrise className="w-2.5 h-2.5 text-rose-400 shrink-0" />;
+    case 'Day':
+      return <Sun className="w-2.5 h-2.5 text-sky-400 shrink-0" />;
+    case 'Golden Hour':
+      return <Sun className="w-2.5 h-2.5 text-amber-400 shrink-0" />;
+    case 'Dusk':
+      return <Sunset className="w-2.5 h-2.5 text-orange-400 shrink-0" />;
+    case 'Night':
+      return <Moon className="w-2.5 h-2.5 text-indigo-400 shrink-0" />;
+    case 'Midnight':
+      return <Moon className="w-2.5 h-2.5 text-purple-400 shrink-0" />;
+    default:
+      return <Clock className="w-2.5 h-2.5 text-cyan-400 shrink-0" />;
+  }
+};
+
+export const getTimeOfDayBadgeStyle = (time?: string) => {
+  switch (time) {
+    case 'Dawn':
+      return 'bg-rose-950/40 text-rose-300 border-rose-500/30 hover:border-rose-400';
+    case 'Day':
+      return 'bg-sky-950/40 text-sky-300 border-sky-500/30 hover:border-sky-400';
+    case 'Golden Hour':
+      return 'bg-amber-950/40 text-amber-300 border-amber-500/30 hover:border-amber-400';
+    case 'Dusk':
+      return 'bg-orange-950/40 text-orange-300 border-orange-500/30 hover:border-orange-400';
+    case 'Night':
+      return 'bg-indigo-950/40 text-indigo-300 border-indigo-500/30 hover:border-indigo-400';
+    case 'Midnight':
+      return 'bg-purple-950/40 text-purple-300 border-purple-500/30 hover:border-purple-400';
+    default:
+      return 'bg-zinc-900 text-zinc-300 border-zinc-700/60 hover:border-zinc-500';
+  }
+};
 
 // Mini Animated Moving Thumbnail Component
 const MovingSceneThumbnail: React.FC<{ scene: Scene; isSelected: boolean }> = ({ scene, isSelected }) => {
@@ -146,6 +204,13 @@ export const Timeline: React.FC<TimelineProps> = ({
   const [editingNarrationSceneId, setEditingNarrationSceneId] = useState<string | null>(null);
   const [inlineEditText, setInlineEditText] = useState<string>('');
   const [savedNarrationSceneId, setSavedNarrationSceneId] = useState<string | null>(null);
+
+  // Scene Location & Time of Day Tag States
+  const [editingLocationSceneId, setEditingLocationSceneId] = useState<string | null>(null);
+  const [locationInput, setLocationInput] = useState<string>('');
+  const [openTimePickerSceneId, setOpenTimePickerSceneId] = useState<string | null>(null);
+  const [filterLocation, setFilterLocation] = useState<string>('all');
+  const [filterTimeOfDay, setFilterTimeOfDay] = useState<string>('all');
 
   const handleStartInlineEdit = (scene: Scene) => {
     setEditingNarrationSceneId(scene.id);
@@ -433,6 +498,29 @@ export const Timeline: React.FC<TimelineProps> = ({
             <GripVertical className="w-3 h-3 text-cyan-400" />
             <span>Drag cards to reorder</span>
           </span>
+
+          {/* Production Locations & Time of Day Overview */}
+          {(() => {
+            const locCount = new Set(scenes.map((s) => s.sceneLocation).filter(Boolean)).size;
+            const timeCount = new Set(scenes.map((s) => s.timeOfDay).filter(Boolean)).size;
+            if (locCount === 0 && timeCount === 0) return null;
+            return (
+              <div className="hidden md:flex items-center gap-1.5 text-[10px] font-mono">
+                {locCount > 0 && (
+                  <span className="flex items-center gap-1 bg-[#090d18] border border-cyan-500/30 px-2 py-0.5 rounded text-cyan-300">
+                    <MapPin className="w-2.5 h-2.5 text-cyan-400" />
+                    <span>{locCount} {locCount === 1 ? 'Location' : 'Locations'}</span>
+                  </span>
+                )}
+                {timeCount > 0 && (
+                  <span className="flex items-center gap-1 bg-[#090d18] border border-amber-500/30 px-2 py-0.5 rounded text-amber-300">
+                    <Clock className="w-2.5 h-2.5 text-amber-400" />
+                    <span>{timeCount} Lighting Times</span>
+                  </span>
+                )}
+              </div>
+            );
+          })()}
 
           {bulkFeedback && (
             <span className="text-[11px] font-mono text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30 animate-pulse">
@@ -957,6 +1045,98 @@ export const Timeline: React.FC<TimelineProps> = ({
                   </div>
                 );
               })()}
+
+              {/* Scene Location & Time of Day Organization Tags */}
+              <div className="px-3 pt-2 flex items-center justify-between gap-1.5 text-[10px] font-mono relative">
+                {/* Location Tag */}
+                <div className="flex-1 min-w-0">
+                  {editingLocationSceneId === scene.id ? (
+                    <div
+                      className="flex items-center gap-1 bg-[#060812] border border-cyan-400 rounded px-1.5 py-0.5 shadow-[0_0_8px_rgba(0,240,255,0.3)]"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <MapPin className="w-2.5 h-2.5 text-cyan-400 shrink-0" />
+                      <input
+                        type="text"
+                        value={locationInput}
+                        onChange={(e) => setLocationInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            onUpdateScene(scene.id, { sceneLocation: locationInput.trim() || 'Unassigned Set' });
+                            setEditingLocationSceneId(null);
+                          } else if (e.key === 'Escape') {
+                            setEditingLocationSceneId(null);
+                          }
+                        }}
+                        onBlur={() => {
+                          onUpdateScene(scene.id, { sceneLocation: locationInput.trim() || 'Unassigned Set' });
+                          setEditingLocationSceneId(null);
+                        }}
+                        autoFocus
+                        placeholder="Enter location / set..."
+                        className="bg-transparent text-cyan-200 text-[10px] focus:outline-none w-full font-mono placeholder:text-zinc-600"
+                      />
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingLocationSceneId(scene.id);
+                        setLocationInput(scene.sceneLocation || '');
+                      }}
+                      className="w-full flex items-center gap-1 px-2 py-0.5 rounded border border-cyan-500/30 bg-cyan-950/30 hover:bg-cyan-900/40 hover:border-cyan-400/60 text-cyan-300 transition-all cursor-pointer text-left group/loc"
+                      title="Click to edit scene location tag"
+                    >
+                      <MapPin className="w-2.5 h-2.5 text-cyan-400 shrink-0 group-hover/loc:scale-110 transition-transform" />
+                      <span className="truncate font-medium">{scene.sceneLocation || 'Set Location'}</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Time of Day Tag with Dropdown Selector */}
+                <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setOpenTimePickerSceneId(openTimePickerSceneId === scene.id ? null : scene.id)
+                    }
+                    className={`px-2 py-0.5 rounded border text-[10px] font-mono flex items-center gap-1 transition-all cursor-pointer font-bold ${getTimeOfDayBadgeStyle(
+                      scene.timeOfDay
+                    )}`}
+                    title="Click to change time of day lighting"
+                  >
+                    {renderTimeOfDayIcon(scene.timeOfDay)}
+                    <span>{scene.timeOfDay || 'TimeOfDay'}</span>
+                  </button>
+
+                  {/* Quick Time of Day Dropdown Popover */}
+                  {openTimePickerSceneId === scene.id && (
+                    <div className="absolute right-0 top-full mt-1.5 w-36 bg-[#0c101d] border border-zinc-700 rounded-xl p-1.5 shadow-[0_8px_24px_rgba(0,0,0,0.95)] z-50 space-y-1 backdrop-blur-md">
+                      <div className="text-[9px] font-mono text-zinc-400 px-1 pb-1 border-b border-zinc-800">
+                        Lighting / Time of Day:
+                      </div>
+                      {TIME_OF_DAY_OPTIONS.map((tod) => (
+                        <button
+                          key={tod.id}
+                          onClick={() => {
+                            onUpdateScene(scene.id, { timeOfDay: tod.id });
+                            setOpenTimePickerSceneId(null);
+                          }}
+                          className={`w-full flex items-center gap-1.5 px-2 py-1 rounded text-[10px] text-left transition-colors cursor-pointer ${
+                            (scene.timeOfDay || 'Night') === tod.id
+                              ? `${tod.bg} ${tod.color} font-bold border ${tod.border}`
+                              : 'text-zinc-300 hover:bg-zinc-800/80 hover:text-white'
+                          }`}
+                        >
+                          {renderTimeOfDayIcon(tod.id)}
+                          <span>{tod.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
 
               {/* Scene Audio, Voice Actor & Transition Badges */}
               <div className="px-3 pt-2 flex items-center justify-between text-[10px] font-mono">

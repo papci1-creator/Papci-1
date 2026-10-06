@@ -67,6 +67,8 @@ export default function App() {
       characterRole: 'Protagonist',
       characterAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
       characterAccent: '#00f0ff',
+      sceneLocation: 'Neo-Tokyo Sublevel 4',
+      timeOfDay: 'Night',
       outfitId: 'outfit-leo-1',
       outfitName: 'Astronaut Spacesuit',
       outfitDescription: 'Matte white pressurized EVA spacesuit with cobalt-blue accents, gold-tinted reflective visor, and cyan life-support conduits.',
@@ -103,6 +105,8 @@ export default function App() {
       characterRole: 'Protagonist',
       characterAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
       characterAccent: '#00f0ff',
+      sceneLocation: 'High-Tech Archive Vault',
+      timeOfDay: 'Midnight',
       outfitId: 'outfit-leo-1',
       outfitName: 'Astronaut Spacesuit',
       outfitDescription: 'Matte white pressurized EVA spacesuit with cobalt-blue accents, gold-tinted reflective visor, and cyan life-support conduits.',
@@ -139,6 +143,8 @@ export default function App() {
       characterRole: 'Antagonist',
       characterAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80',
       characterAccent: '#ffaa00',
+      sceneLocation: 'Megastructure Catwalks',
+      timeOfDay: 'Dusk',
       outfitId: 'outfit-malakor-1',
       outfitName: 'Obsidian High-Collar Trench',
       outfitDescription: 'Heavy armored obsidian trench coat with amber illuminated silk lining, gilded shoulder epaulets, and titanium double-breasted clasps.',
@@ -156,6 +162,11 @@ export default function App() {
   ]);
 
   const totalDuration = scenes.reduce((acc, s) => acc + s.duration, 0);
+
+  // Automatically recalculate voiceover audio ducking schedules whenever scenes are created or updated
+  useEffect(() => {
+    audioEngine.updateDuckingScheduleFromScenes(scenes);
+  }, [scenes]);
 
   // Recalculate timestamps helper
   const recalibrateTimestamps = (updatedScenes: Scene[]) => {
@@ -536,6 +547,8 @@ export default function App() {
       voiceActor,
       videoUrl: SAMPLE_VIDEO_CLIPS[newIdx % SAMPLE_VIDEO_CLIPS.length].url,
       transitionEffect: 'Dissolve',
+      sceneLocation: 'Sector Nexus Plaza',
+      timeOfDay: 'Golden Hour',
       status: 'ready',
       progress: 100,
       generationPhase: 'Render Ready (100%)',

@@ -140,6 +140,15 @@ class AudioEngine {
   }
 
   /**
+   * Automatically calculates and registers ducking schedule based on updated scenes.
+   */
+  public updateDuckingScheduleFromScenes(scenes: Scene[]): VoiceoverSegment[] {
+    const segments = this.calculateVoiceoverSegments(scenes);
+    this.setDuckingSchedule(segments);
+    return segments;
+  }
+
+  /**
    * Evaluates the current timeline playback timestamp and automatically applies
    * dynamic audio ducking if the time falls within any voiceover segment.
    * Call this in your timeline playback loop or frame rendering loop.
