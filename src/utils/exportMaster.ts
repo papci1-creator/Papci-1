@@ -38,9 +38,23 @@ export async function exportMasterVideo(
     throw new Error('Could not create offscreen canvas context.');
   }
 
-  const totalDuration = scenes.reduce((acc, s) => acc + s.duration, 0);
+  // Calculate synchronized lengths for each scene (MoviePy audio synchronization algorithm)
+  // 1. If audio_duration > video_duration: extend video by holding last frame (+0.5s breathing room)
+  // 2. If video_duration >= audio_duration: trim video to audio_duration + 0.5s padding
+  const syncedSceneDurations = scenes.map((s) => {
+    if (s.audioDuration && s.audioDuration > 0) {
+      if (s.audioDuration > s.duration) {
+        return s.duration + (s.audioDuration - s.duration + 0.5);
+      } else {
+        return Math.min(s.duration, s.audioDuration + 0.5);
+      }
+    }
+    return s.duration;
+  });
+
+  const totalDuration = syncedSceneDurations.reduce((acc, d) => acc + d, 0);
   const fps = 30;
-  const totalFrames = Math.round(totalDuration * fps);
+  const totalFrames = Math.max(1, Math.round(totalDuration * fps));
 
   // Capture canvas video stream
   const canvasStream = canvas.captureStream(fps);
@@ -92,9 +106,10 @@ export async function exportMasterVideo(
 
   for (let frame = 0; frame < totalFrames; frame++) {
     const currentScene = scenes[currentSceneIdx];
+    const currentSyncedDuration = syncedSceneDurations[currentSceneIdx];
     const transitionDuration = 0.75; // 750ms transition
     let transitionProgress = 0;
-    const timeRemaining = currentScene.duration - timeInCurrentScene;
+    const timeRemaining = currentSyncedDuration - timeInCurrentScene;
 
     // Calculate transition progress approaching clip boundary
     if (currentSceneIdx < scenes.length - 1 && timeRemaining <= transitionDuration) {
@@ -108,10 +123,16 @@ export async function exportMasterVideo(
     const currentGlobalTime = frame * frameDuration;
     audioEngine.updateDuckingAtTime(currentGlobalTime);
 
+    // If audio duration is longer than video, hold the last frame
+    const effectiveTimeInScene =
+      timeInCurrentScene > currentScene.duration
+        ? Math.max(0, currentScene.duration - 0.05)
+        : timeInCurrentScene;
+
     renderCinematicFrame(ctx, width, height, {
       scene: currentScene,
       nextScene: scenes[currentSceneIdx + 1],
-      timeInScene: timeInCurrentScene,
+      timeInScene: effectiveTimeInScene,
       transitionProgress,
       aspectRatio,
       showSubtitles: true,
@@ -119,7 +140,7 @@ export async function exportMasterVideo(
     });
 
     timeInCurrentScene += frameDuration;
-    if (timeInCurrentScene >= currentScene.duration && currentSceneIdx < scenes.length - 1) {
+    if (timeInCurrentScene >= currentSyncedDuration && currentSceneIdx < scenes.length - 1) {
       currentSceneIdx++;
       timeInCurrentScene = 0;
     }

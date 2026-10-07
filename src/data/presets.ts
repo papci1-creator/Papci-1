@@ -10,10 +10,10 @@ export const VISUAL_STYLES = [
 ];
 
 export const VIDEO_GENERATORS = [
+  { id: 'Google Veo 3.1', label: 'Google Veo 3.1 (veo-3.1-generate-preview)', badge: 'Google Veo', desc: 'Photorealistic high-fidelity video generation with 16:9 / 720p / 1080p rendering' },
   { id: 'Runway Gen-3 Alpha', label: 'Runway Gen-3 Alpha', badge: 'Ultra-Motion', desc: 'High photorealism with smooth camera tracking' },
   { id: 'Luma Dream Machine', label: 'Luma Dream Machine 2.0', badge: 'Fast Dynamic', desc: 'Extreme physical dynamics and fluid object morphs' },
   { id: 'OpenAI Sora', label: 'OpenAI Sora Turbo', badge: 'Cinematic Length', desc: 'Deep temporal coherence and multi-character tracking' },
-  { id: 'Google Veo-2', label: 'Google Veo-2 Studio', badge: 'Pro Camera', desc: 'Precise cinematic focal depth and directorial movements' },
 ];
 
 export const CAMERA_MOVEMENTS = [
@@ -24,12 +24,48 @@ export const CAMERA_MOVEMENTS = [
   { id: 'Orbit', label: 'Orbit (Circular Arc)', icon: 'RotateCw', desc: 'Sweeping rotational arc framing the central subject' },
 ];
 
-export const TRANSITION_EFFECTS: { id: TransitionEffect; label: string; desc: string }[] = [
-  { id: 'Dissolve', label: 'Dissolve (Cross Blend)', desc: 'Smooth cinematic luminance blend into next clip' },
-  { id: 'Fade', label: 'Fade (Blackout)', desc: 'Classic dramatic blackout dip between shots' },
-  { id: 'Glitch', label: 'Glitch (Cyber Shift)', desc: 'High-tech chromatic RGB split & digital distortion' },
-  { id: 'Cinematic Wipe', label: 'Cinematic Wipe (Beam)', desc: 'Anamorphic light streak sweep across the frame' },
-  { id: 'None', label: 'None (Hard Cut)', desc: 'Instant abrupt cut between scene frames' },
+export const TRANSITION_EFFECTS: {
+  id: TransitionEffect;
+  label: string;
+  subtitle: string;
+  desc: string;
+  accent: string;
+}[] = [
+  {
+    id: 'Dissolve',
+    label: 'Dissolve',
+    subtitle: 'Cross Blend',
+    desc: 'Smooth cinematic luminance blend with soft atmospheric bloom into next clip',
+    accent: '#00f0ff',
+  },
+  {
+    id: 'Fade',
+    label: 'Fade',
+    subtitle: 'Blackout Dip',
+    desc: 'Classic dramatic blackout dip transition between scene frames',
+    accent: '#818cf8',
+  },
+  {
+    id: 'Wipe',
+    label: 'Wipe',
+    subtitle: 'Light Beam Sweep',
+    desc: 'Anamorphic light streak sweep and trailing wipe across the frame',
+    accent: '#fbbf24',
+  },
+  {
+    id: 'Glitch',
+    label: 'Glitch',
+    subtitle: 'Cyber RGB Split',
+    desc: 'High-tech chromatic RGB split, horizontal scanlines & digital cyber distortion',
+    accent: '#f43f5e',
+  },
+  {
+    id: 'None',
+    label: 'None',
+    subtitle: 'Hard Cut',
+    desc: 'Instant abrupt cut between scene frames with zero blend',
+    accent: '#94a3b8',
+  },
 ];
 
 export const SAMPLE_VIDEO_CLIPS = [
@@ -60,6 +96,44 @@ export const SAMPLE_VIDEO_CLIPS = [
 ];
 
 export const DEFAULT_CHARACTERS: CharacterProfile[] = [
+  {
+    id: 'char-elena',
+    name: 'Elena',
+    tag: '@Elena',
+    role: 'Protagonist',
+    description: 'Elena, a 30-year-old pilot. Wearing an olive-drab flight jacket with a faded orange collar patch, dark auburn hair tied back in a low bun, sharp jawline, cinematic studio lighting.',
+    faceDescription: '30-year-old pilot, dark auburn hair tied back in a low bun, sharp jawline, cinematic studio lighting, photorealistic 8k resolution, poised aviator expression.',
+    assignedVoice: 'Female Authoritative',
+    colorAccent: '#f97316',
+    imageUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=400&q=80',
+    activeOutfitId: 'outfit-elena-1',
+    outfits: [
+      {
+        id: 'outfit-elena-1',
+        name: 'Olive-Drab Flight Jacket',
+        description: 'Olive-drab aviation flight jacket with faded orange collar patch, brass zippers, and flight squadron insignia.',
+        imageUrl: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=300&q=80',
+        colorAccent: '#f97316',
+        isDefault: true,
+      },
+      {
+        id: 'outfit-elena-2',
+        name: 'High-Altitude Pressure Suit',
+        description: 'Pressurized stratospheric flight suit with tinted helmet and oxygen harness.',
+        imageUrl: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=300&q=80',
+        colorAccent: '#fbbf24',
+        isDefault: false,
+      },
+    ],
+    referenceSheet: {
+      frontAngleDescription: 'Studio portrait of Elena: 30-year-old pilot, olive-drab flight jacket, faded orange collar patch, dark auburn hair in low bun, sharp jawline.',
+      sideProfileDescription: 'Profile view showing cranial hair contour, defined jawline, and flight jacket collar patch detail.',
+      actionAngleDescription: 'Dynamic 3/4 flight perspective with natural cockpit key lighting.',
+      costumeColorPalette: ['#556b2f', '#f97316', '#1e293b', '#fbbf24'],
+      keyAnatomyFeatures: ['Dark auburn hair in low bun', 'Sharp jawline', 'Olive-drab flight jacket', 'Faded orange collar patch'],
+      generatedAt: 'Imagen 3 Master Character Reference v1.0',
+    },
+  },
   {
     id: 'char-leo',
     name: 'Leo',
@@ -307,5 +381,19 @@ We were never the first explorers here. We were merely the first to return.`,
 Young mechanic Rin adjusted her leather goggles as the compass needle spun frantically. Through a gap in the thunderhead, the legendary floating city of Aethelgard finally emerged, bathed in warm amber sunlight.
 
 Gigantic mechanical manta rays drifted alongside the ship's wooden hull. Rin grabbed the steering wheel with a grin. The great skies belonged to those daring enough to fly into the unknown.`,
+  },
+  {
+    id: 'martian-temple',
+    title: 'Mars: The Buried Altar',
+    genre: 'Sci-Fi Mystery',
+    visualStyle: 'Cinematic',
+    videoGenerator: 'Runway Gen-3 Alpha',
+    voiceActor: 'Marcus Vance',
+    musicStyle: 'Cinematic Ambient',
+    text: `A lone astronaut discovers an ancient temple buried under the red sands of Mars.
+
+Inside, glowing blue glyphs pulse to life as the astronaut touches the central altar.
+
+A colossal subterranean star chamber awakens, casting alien constellations against the subterranean obsidian stone.`,
   },
 ];

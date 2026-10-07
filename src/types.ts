@@ -5,7 +5,7 @@ export interface VisualTheme {
   particleType: 'rain' | 'embers' | 'sparks' | 'dust' | 'stars' | 'matrix';
 }
 
-export type TransitionEffect = 'Dissolve' | 'Fade' | 'Glitch' | 'Cinematic Wipe' | 'None';
+export type TransitionEffect = 'Dissolve' | 'Fade' | 'Glitch' | 'Wipe' | 'Cinematic Wipe' | 'None';
 
 export type CameraIntensity = 'Slow' | 'Moderate' | 'Dynamic' | 'Fast';
 
@@ -43,6 +43,7 @@ export interface CharacterProfile {
   colorAccent: string; // glowing hex accent color
   outfits: CharacterOutfit[]; // Dynamic Outfit Wardrobe sub-list
   activeOutfitId?: string;
+  costumeLock?: string; // Dense, repeatable description of exact garments, colors, textures, and accessories
   referenceSheet?: CharacterReferenceSheet;
 }
 
@@ -65,6 +66,10 @@ export interface Scene {
   audioVolume?: number; // 0.0 to 1.0 (or 100%)
   voicePitch?: number; // 0.5 to 1.5 (default 1.0)
   voiceRate?: number; // 0.6 to 1.5 (default 1.0)
+  audioUrl?: string; // Generated narration audio file (Data URL, Blob URL, or WAV)
+  audioDuration?: number; // Exact synthesized audio duration in seconds
+  isAudioGenerated?: boolean; // Flag indicating high-fidelity TTS audio file is generated
+  audioFormat?: 'wav' | 'mp3' | 'aac';
   transitionEffect?: TransitionEffect;
   videoUrl?: string; // Live preview placeholder video clip URL or open-source loop
   characterId?: string; // ID of linked CharacterProfile
@@ -73,6 +78,7 @@ export interface Scene {
   characterDescription?: string;
   characterAvatar?: string;
   characterAccent?: string;
+  costumeLock?: string; // Dense, repeatable description of exact garments, colors, textures, and accessories
   outfitId?: string; // ID of chosen outfit for this scene
   outfitName?: string; // Name of chosen outfit
   outfitDescription?: string; // Detailed outfit specs

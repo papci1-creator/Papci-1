@@ -11,6 +11,8 @@ import { Timeline } from './components/Timeline';
 import { ExportModal } from './components/ExportModal';
 import { SettingsModal } from './components/SettingsModal';
 import { TurnaroundModal } from './components/TurnaroundModal';
+import { GoogleFormsModal } from './components/GoogleFormsModal';
+import { BatchAudioModal } from './components/BatchAudioModal';
 import { Scene, AspectRatio, PresetStory, CharacterProfile } from './types';
 import { PRESET_STORIES, VISUAL_STYLES, VIDEO_GENERATORS, VOICE_ACTORS, MUSIC_STYLES, SAMPLE_VIDEO_CLIPS, DEFAULT_CHARACTERS } from './data/presets';
 import { audioEngine } from './utils/audioEngine';
@@ -35,6 +37,8 @@ export default function App() {
   const [currentTime, setCurrentTime] = useState(0);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isGoogleFormsOpen, setIsGoogleFormsOpen] = useState(false);
+  const [isBatchAudioOpen, setIsBatchAudioOpen] = useState(false);
   const [useLiveVideoPreview, setUseLiveVideoPreview] = useState(true);
 
   // Characters & Reference Manager State
@@ -350,6 +354,8 @@ export default function App() {
           cameraMotion: cam,
           character: sec.primaryCharacter,
           outfit: sec.selectedOutfit,
+          sceneLocation: sec.sceneLocation,
+          timeOfDay: sec.timeOfDay,
         });
 
         return {
@@ -376,6 +382,8 @@ export default function App() {
           outfitName: sec.selectedOutfit?.name,
           outfitDescription: sec.selectedOutfit?.description,
           outfitImage: sec.selectedOutfit?.imageUrl,
+          sceneLocation: sec.sceneLocation || 'Neo-Tokyo Sublevel 4',
+          timeOfDay: sec.timeOfDay || 'Night',
           videoUrl: SAMPLE_VIDEO_CLIPS[idx % SAMPLE_VIDEO_CLIPS.length]?.url,
           transitionEffect: 'Dissolve' as const,
           status: 'ready' as const,
@@ -622,6 +630,7 @@ export default function App() {
         onSelectPreset={handleSelectPreset}
         musicPlaying={musicStyle !== 'None'}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenGoogleForms={() => setIsGoogleFormsOpen(true)}
       />
 
       {/* 2. Workspace Split: Two-Column Layout */}
@@ -704,6 +713,7 @@ export default function App() {
               onAddScene={handleAddScene}
               onSeekToScene={(scene) => setCurrentTime(scene.startTime)}
               isPlaying={isPlaying}
+              onOpenBatchAudio={() => setIsBatchAudioOpen(true)}
             />
           </div>
         </div>
@@ -737,6 +747,28 @@ export default function App() {
         onClose={() => {
           setIsTurnaroundOpen(false);
           setTurnaroundCharacter(null);
+        }}
+        onUpdateCharacter={(id, updates) => {
+          setCharacters((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c)));
+          setTurnaroundCharacter((prev) => (prev && prev.id === id ? { ...prev, ...updates } : prev));
+        }}
+      />
+
+      {/* 6. Google Forms Integration Modal */}
+      <GoogleFormsModal
+        isOpen={isGoogleFormsOpen}
+        onClose={() => setIsGoogleFormsOpen(false)}
+        projectTitle={projectTitle}
+        scenes={scenes}
+      />
+
+      {/* 7. Batch Audio Narration Generator Modal */}
+      <BatchAudioModal
+        isOpen={isBatchAudioOpen}
+        onClose={() => setIsBatchAudioOpen(false)}
+        scenes={scenes}
+        onBatchUpdateScenes={(updated) => {
+          setScenes(updated);
         }}
       />
     </div>

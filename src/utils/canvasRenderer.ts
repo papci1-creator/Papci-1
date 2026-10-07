@@ -425,7 +425,7 @@ export function renderCinematicFrame(
         ctx.fillRect(0, sy, width, 2 + bell * 4);
       }
       ctx.restore();
-    } else if (effect === 'Cinematic Wipe') {
+    } else if (effect === 'Cinematic Wipe' || effect === 'Wipe') {
       // Anamorphic Light Bar Sweep
       const beamX = t * (width + 300) - 150;
       const wipeGrad = ctx.createLinearGradient(beamX - 100, 0, beamX + 100, 0);

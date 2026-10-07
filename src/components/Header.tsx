@@ -1,5 +1,5 @@
 import React from 'react';
-import { Film, Sparkles, Download, Volume2, Clapperboard, Layers, Music, Settings } from 'lucide-react';
+import { Film, Sparkles, Download, Volume2, Clapperboard, Layers, Music, Settings, FileText } from 'lucide-react';
 import { PRESET_STORIES } from '../data/presets';
 import { PresetStory } from '../types';
 
@@ -13,6 +13,7 @@ interface HeaderProps {
   onSelectPreset: (preset: PresetStory) => void;
   musicPlaying: boolean;
   onOpenSettings?: () => void;
+  onOpenGoogleForms?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -25,6 +26,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectPreset,
   musicPlaying,
   onOpenSettings,
+  onOpenGoogleForms,
 }) => {
   const formatTime = (secs: number) => {
     const m = Math.floor(secs / 60);
@@ -112,6 +114,18 @@ export const Header: React.FC<HeaderProps> = ({
             </>
           )}
         </div>
+
+        {/* Google Forms Integration Button */}
+        {onOpenGoogleForms && (
+          <button
+            onClick={onOpenGoogleForms}
+            title="Google Forms - Audience Screening & Feedback"
+            className="px-3 py-1.5 rounded-lg bg-[#0e121d] hover:bg-purple-950/30 text-purple-300 hover:text-purple-200 border border-zinc-800 hover:border-purple-500/40 text-xs font-mono font-medium flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_12px_rgba(168,85,247,0.15)]"
+          >
+            <FileText className="w-3.5 h-3.5 text-purple-400" />
+            <span className="hidden md:inline">Google Forms</span>
+          </button>
+        )}
 
         {/* Settings Gear Button */}
         {onOpenSettings && (

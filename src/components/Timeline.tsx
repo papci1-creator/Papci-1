@@ -34,6 +34,10 @@ import {
   Moon,
   Sunrise,
   Sunset,
+  ChevronDown,
+  Zap,
+  EyeOff,
+  MoveHorizontal,
 } from 'lucide-react';
 import { Scene, TransitionEffect, CharacterProfile, TimeOfDay } from '../types';
 import { renderCinematicFrame } from '../utils/canvasRenderer';
@@ -58,6 +62,7 @@ interface TimelineProps {
   isPlaying: boolean;
   characters?: CharacterProfile[];
   onOpenTurnaround?: (char: CharacterProfile) => void;
+  onOpenBatchAudio?: () => void;
 }
 
 export const TIME_OF_DAY_OPTIONS: {
@@ -110,6 +115,85 @@ export const getTimeOfDayBadgeStyle = (time?: string) => {
       return 'bg-purple-950/40 text-purple-300 border-purple-500/30 hover:border-purple-400';
     default:
       return 'bg-zinc-900 text-zinc-300 border-zinc-700/60 hover:border-zinc-500';
+  }
+};
+
+export const renderTransitionIcon = (effect?: TransitionEffect, className = 'w-3 h-3') => {
+  switch (effect) {
+    case 'Fade':
+      return <EyeOff className={`${className} text-indigo-400 shrink-0`} />;
+    case 'Glitch':
+      return <Zap className={`${className} text-rose-400 shrink-0`} />;
+    case 'Wipe':
+    case 'Cinematic Wipe':
+      return <MoveHorizontal className={`${className} text-amber-400 shrink-0`} />;
+    case 'None':
+      return <Square className={`${className} text-zinc-500 shrink-0`} />;
+    case 'Dissolve':
+    default:
+      return <Sparkles className={`${className} text-cyan-400 shrink-0`} />;
+  }
+};
+
+export const getTransitionVisualDetails = (effect?: TransitionEffect) => {
+  switch (effect) {
+    case 'Fade':
+      return {
+        label: 'Fade',
+        subtitle: 'Blackout Dip',
+        desc: 'Dramatic blackout dip transition between shots',
+        border: 'border-indigo-500/40',
+        badge: 'bg-indigo-950/40 text-indigo-300 border-indigo-500/30 hover:border-indigo-400/60',
+        activeRing: 'border-indigo-400/80 bg-indigo-950/60 text-indigo-200',
+        previewGradient: 'from-zinc-900 via-indigo-950 to-black',
+        accentColor: '#818cf8',
+      };
+    case 'Glitch':
+      return {
+        label: 'Glitch',
+        subtitle: 'Cyber RGB Split',
+        desc: 'Chromatic RGB split, scanlines & digital distortion',
+        border: 'border-rose-500/40',
+        badge: 'bg-rose-950/40 text-rose-300 border-rose-500/30 hover:border-rose-400/60',
+        activeRing: 'border-rose-400/80 bg-rose-950/60 text-rose-200',
+        previewGradient: 'from-cyan-400 via-rose-500 to-amber-400',
+        accentColor: '#f43f5e',
+      };
+    case 'Wipe':
+    case 'Cinematic Wipe':
+      return {
+        label: 'Wipe',
+        subtitle: 'Light Beam Sweep',
+        desc: 'Anamorphic light streak sweep across the frame',
+        border: 'border-amber-500/40',
+        badge: 'bg-amber-950/40 text-amber-300 border-amber-500/30 hover:border-amber-400/60',
+        activeRing: 'border-amber-400/80 bg-amber-950/60 text-amber-200',
+        previewGradient: 'from-amber-500 via-yellow-300 to-cyan-400',
+        accentColor: '#fbbf24',
+      };
+    case 'None':
+      return {
+        label: 'None',
+        subtitle: 'Hard Cut',
+        desc: 'Instant abrupt cut between frames with zero blend',
+        border: 'border-zinc-700/40',
+        badge: 'bg-zinc-900/60 text-zinc-400 border-zinc-700/30 hover:border-zinc-500/50',
+        activeRing: 'border-zinc-500/80 bg-zinc-900/80 text-zinc-300',
+        previewGradient: 'from-zinc-700 to-zinc-900',
+        accentColor: '#94a3b8',
+      };
+    case 'Dissolve':
+    default:
+      return {
+        label: 'Dissolve',
+        subtitle: 'Cross Blend',
+        desc: 'Smooth cinematic luminance blend with soft bloom',
+        border: 'border-cyan-500/40',
+        badge: 'bg-cyan-950/40 text-cyan-300 border-cyan-500/30 hover:border-cyan-400/60',
+        activeRing: 'border-cyan-400/80 bg-cyan-950/60 text-cyan-200',
+        previewGradient: 'from-cyan-500 via-sky-400 to-blue-600',
+        accentColor: '#00f0ff',
+      };
   }
 };
 
@@ -177,6 +261,7 @@ export const Timeline: React.FC<TimelineProps> = ({
   isPlaying,
   characters = [],
   onOpenTurnaround,
+  onOpenBatchAudio,
 }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [previewingVoiceId, setPreviewingVoiceId] = useState<string | null>(null);
@@ -211,6 +296,29 @@ export const Timeline: React.FC<TimelineProps> = ({
   const [openTimePickerSceneId, setOpenTimePickerSceneId] = useState<string | null>(null);
   const [filterLocation, setFilterLocation] = useState<string>('all');
   const [filterTimeOfDay, setFilterTimeOfDay] = useState<string>('all');
+
+  // Visual Transition Dropdown Selector State
+  const [openTransitionDropdownSceneId, setOpenTransitionDropdownSceneId] = useState<string | null>(null);
+
+  // Global listener to close popovers on click outside or Escape
+  useEffect(() => {
+    const handleGlobalClick = () => {
+      setOpenTimePickerSceneId(null);
+      setOpenTransitionDropdownSceneId(null);
+    };
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpenTimePickerSceneId(null);
+        setOpenTransitionDropdownSceneId(null);
+      }
+    };
+    window.addEventListener('click', handleGlobalClick);
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => {
+      window.removeEventListener('click', handleGlobalClick);
+      window.removeEventListener('keydown', handleGlobalKeyDown);
+    };
+  }, []);
 
   const handleStartInlineEdit = (scene: Scene) => {
     setEditingNarrationSceneId(scene.id);
@@ -530,6 +638,18 @@ export const Timeline: React.FC<TimelineProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Batch Audio Generator Button */}
+          {onOpenBatchAudio && (
+            <button
+              onClick={onOpenBatchAudio}
+              className="px-2.5 py-1 rounded-md text-xs font-semibold bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/35 flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_12px_rgba(168,85,247,0.15)]"
+              title="Batch generate and sync audio files for all scenes at once"
+            >
+              <Mic className="w-3.5 h-3.5 text-purple-400" />
+              <span>Batch Audio</span>
+            </button>
+          )}
+
           {/* Bulk Edit Mode Toggle Button */}
           <button
             onClick={() => {
@@ -693,6 +813,17 @@ export const Timeline: React.FC<TimelineProps> = ({
               Apply Vol
             </button>
           </div>
+
+          {/* Batch Audio Generator in Bulk Mode */}
+          {onOpenBatchAudio && (
+            <button
+              onClick={onOpenBatchAudio}
+              className="px-2.5 py-1 rounded bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 font-bold border border-purple-500/40 text-[11px] flex items-center gap-1 transition-all cursor-pointer shadow-[0_0_8px_rgba(168,85,247,0.2)]"
+            >
+              <Mic className="w-3 h-3 text-purple-400" />
+              <span>Batch Audio ({selectedSceneIds.length > 0 ? selectedSceneIds.length : scenes.length})</span>
+            </button>
+          )}
 
           {/* Delete Action & Close */}
           <div className="flex items-center gap-2">
@@ -1144,10 +1275,33 @@ export const Timeline: React.FC<TimelineProps> = ({
                   <Mic className="w-2.5 h-2.5" />
                   <span className="truncate max-w-[80px]">{scene.voiceActor.split(' ')[0]}</span>
                 </span>
-                <span className="text-amber-300 bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-500/20 text-[9px] flex items-center gap-1">
-                  <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                {scene.audioUrl && (
+                  <span className="text-emerald-300 bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-500/30 text-[9px] flex items-center gap-1 font-bold">
+                    <Check className="w-2.5 h-2.5 text-emerald-400" />
+                    <span>{scene.audioDuration ? `${scene.audioDuration}s WAV` : 'WAV Sync'}</span>
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpenTransitionDropdownSceneId(
+                      openTransitionDropdownSceneId === scene.id ? null : scene.id
+                    );
+                  }}
+                  className={`px-1.5 py-0.5 rounded border text-[9px] flex items-center gap-1 font-mono transition-all cursor-pointer ${
+                    getTransitionVisualDetails(scene.transitionEffect).badge
+                  }`}
+                  title="Click to select visual transition effect"
+                >
+                  {renderTransitionIcon(scene.transitionEffect, 'w-2.5 h-2.5')}
                   <span>Tr: {scene.transitionEffect || 'Dissolve'}</span>
-                </span>
+                  <ChevronDown
+                    className={`w-2 h-2 opacity-60 transition-transform ${
+                      openTransitionDropdownSceneId === scene.id ? 'rotate-180 text-amber-400' : ''
+                    }`}
+                  />
+                </button>
                 <span className="text-zinc-400 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800 text-[9px]">
                   Vol: {Math.round((scene.audioVolume ?? 1.0) * 100)}%
                 </span>
@@ -1211,36 +1365,161 @@ export const Timeline: React.FC<TimelineProps> = ({
                   />
                 </div>
 
-                {/* Transitions Selector */}
-                <div className="space-y-1" onClick={(e) => e.stopPropagation()}>
+                {/* Visual Transition Dropdown Selector */}
+                <div className="space-y-1 relative" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-between text-[10px] text-zinc-400 font-medium">
-                    <span className="flex items-center gap-1">
+                    <span className="flex items-center gap-1 text-zinc-300">
                       <Sparkles className="w-3 h-3 text-amber-400" />
-                      Visual Transition to Next Clip
+                      <span>Visual Transition to Next Scene</span>
                     </span>
-                    <span className="text-cyan-300 font-mono text-[9px] font-semibold">
-                      {scene.transitionEffect || 'Dissolve'}
+                    <span className="text-[9px] font-mono text-zinc-500">
+                      Shader Blend
                     </span>
                   </div>
-                  <div className="grid grid-cols-5 gap-1">
-                    {TRANSITION_EFFECTS.map((tr) => {
-                      const isSelected = (scene.transitionEffect || 'Dissolve') === tr.id;
-                      return (
+
+                  {/* Dropdown Trigger Button */}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setOpenTransitionDropdownSceneId(
+                        openTransitionDropdownSceneId === scene.id ? null : scene.id
+                      )
+                    }
+                    className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg border bg-[#080c16] hover:bg-[#0c1122] transition-all cursor-pointer group text-left ${
+                      openTransitionDropdownSceneId === scene.id
+                        ? 'border-amber-400/80 shadow-[0_0_12px_rgba(251,191,36,0.25)] ring-1 ring-amber-400/30'
+                        : 'border-zinc-800 hover:border-zinc-700'
+                    }`}
+                    title="Select video transition effect (Fade, Dissolve, Wipe, Glitch, etc.)"
+                  >
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <div className="p-1 rounded bg-[#0f1424] border border-zinc-700/60 shrink-0">
+                        {renderTransitionIcon(scene.transitionEffect, 'w-3.5 h-3.5')}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold text-zinc-200 group-hover:text-white font-mono">
+                            {scene.transitionEffect || 'Dissolve'}
+                          </span>
+                          <span className="text-[10px] text-zinc-400 truncate">
+                            · {getTransitionVisualDetails(scene.transitionEffect).subtitle}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0 ml-1">
+                      {/* Mini Visual Gradient Preview Bar */}
+                      <div
+                        className={`w-9 h-2.5 rounded bg-gradient-to-r ${
+                          getTransitionVisualDetails(scene.transitionEffect).previewGradient
+                        } border border-white/10 shadow-inner`}
+                        title="Transition effect preview"
+                      />
+                      <ChevronDown
+                        className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 ${
+                          openTransitionDropdownSceneId === scene.id ? 'rotate-180 text-amber-400' : ''
+                        }`}
+                      />
+                    </div>
+                  </button>
+
+                  {/* Visual Dropdown Popover Menu */}
+                  {openTransitionDropdownSceneId === scene.id && (
+                    <div
+                      className="absolute left-0 right-0 top-full mt-1.5 bg-[#090d1a] border border-zinc-700/90 rounded-xl p-2 shadow-[0_16px_40px_rgba(0,0,0,0.95)] z-50 space-y-1 backdrop-blur-md animate-in fade-in slide-in-from-top-1 duration-150"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 px-1 pb-1.5 border-b border-zinc-800">
+                        <span className="font-semibold text-zinc-300">Choose Transition Effect:</span>
+                        <span className="text-[9px] text-zinc-500">Live Preview</span>
+                      </div>
+
+                      <div className="space-y-1 pt-1 max-h-56 overflow-y-auto custom-scrollbar">
+                        {TRANSITION_EFFECTS.map((tr) => {
+                          const currentEffect = scene.transitionEffect || 'Dissolve';
+                          const isSelected =
+                            currentEffect === tr.id ||
+                            (currentEffect === 'Cinematic Wipe' && tr.id === 'Wipe');
+                          const details = getTransitionVisualDetails(tr.id);
+
+                          return (
+                            <button
+                              key={tr.id}
+                              type="button"
+                              onClick={() => {
+                                onUpdateScene(scene.id, { transitionEffect: tr.id });
+                                setOpenTransitionDropdownSceneId(null);
+                              }}
+                              className={`w-full flex items-center justify-between p-2 rounded-lg text-left transition-all cursor-pointer group/opt border ${
+                                isSelected
+                                  ? 'bg-[#12182b] border-amber-400/60 shadow-[0_0_12px_rgba(251,191,36,0.15)] ring-1 ring-amber-400/20'
+                                  : 'border-transparent hover:bg-[#0f1424] hover:border-zinc-800'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <div className="p-1 rounded bg-[#0a0e1c] border border-zinc-700/60 shrink-0">
+                                  {renderTransitionIcon(tr.id, 'w-3.5 h-3.5')}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <span
+                                      className={`text-xs font-bold font-mono ${
+                                        isSelected
+                                          ? 'text-amber-300'
+                                          : 'text-zinc-200 group-hover/opt:text-white'
+                                      }`}
+                                    >
+                                      {tr.label}
+                                    </span>
+                                    <span className="text-[10px] text-zinc-400">
+                                      ({tr.subtitle})
+                                    </span>
+                                  </div>
+                                  <p className="text-[10px] text-zinc-500 truncate mt-0.5">
+                                    {tr.desc}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0 ml-2">
+                                {/* Visual Preview Strip */}
+                                <div
+                                  className={`w-11 h-2.5 rounded bg-gradient-to-r ${details.previewGradient} border border-white/10 shadow-sm`}
+                                />
+                                {isSelected ? (
+                                  <div className="w-4 h-4 rounded-full bg-amber-400 text-black flex items-center justify-center shrink-0 shadow-[0_0_8px_rgba(251,191,36,0.6)]">
+                                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                  </div>
+                                ) : (
+                                  <div className="w-4 h-4 rounded-full border border-zinc-700 shrink-0 opacity-40 group-hover/opt:opacity-80" />
+                                )}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Quick Action: Apply to all scenes */}
+                      <div className="pt-1.5 mt-1 border-t border-zinc-800/80 flex items-center justify-between text-[10px]">
+                        <span className="text-zinc-500 font-mono text-[9px]">Apply to sequence:</span>
                         <button
-                          key={tr.id}
-                          onClick={() => onUpdateScene(scene.id, { transitionEffect: tr.id })}
-                          className={`py-1 px-0.5 rounded text-[9px] font-mono border transition-all cursor-pointer text-center truncate ${
-                            isSelected
-                              ? 'border-amber-400 bg-amber-950/40 text-amber-300 font-bold shadow-[0_0_8px_rgba(255,170,0,0.25)]'
-                              : 'border-zinc-800 bg-[#07090f] text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
-                          }`}
-                          title={tr.desc}
+                          type="button"
+                          onClick={() => {
+                            const chosen = scene.transitionEffect || 'Dissolve';
+                            scenes.forEach((s) => {
+                              onUpdateScene(s.id, { transitionEffect: chosen });
+                            });
+                            triggerFeedback(`Applied "${chosen}" transition to all scenes`);
+                            setOpenTransitionDropdownSceneId(null);
+                          }}
+                          className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white font-mono text-[9px] transition-colors cursor-pointer border border-zinc-700"
                         >
-                          {tr.id === 'Cinematic Wipe' ? 'Wipe' : tr.id}
+                          Apply "{scene.transitionEffect || 'Dissolve'}" to all shots
                         </button>
-                      );
-                    })}
-                  </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* 3. Inline Editable Voiceover Script Box & Delivery Tuning */}

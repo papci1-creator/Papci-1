@@ -1,15 +1,35 @@
-import React, { useRef } from 'react';
-import { X, Download, Shield, Sparkles, User, Camera, Layers, CheckCircle2 } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import {
+  X,
+  Download,
+  Shield,
+  Sparkles,
+  User,
+  Camera,
+  Layers,
+  CheckCircle2,
+  Image as ImageIcon,
+  Check,
+  RotateCcw,
+} from 'lucide-react';
 import { CharacterProfile } from '../types';
 
 interface TurnaroundModalProps {
   character: CharacterProfile | null;
   isOpen: boolean;
   onClose: () => void;
+  onUpdateCharacter?: (id: string, updates: Partial<CharacterProfile>) => void;
 }
 
-export const TurnaroundModal: React.FC<TurnaroundModalProps> = ({ character, isOpen, onClose }) => {
+export const TurnaroundModal: React.FC<TurnaroundModalProps> = ({
+  character,
+  isOpen,
+  onClose,
+  onUpdateCharacter,
+}) => {
   const sheetContainerRef = useRef<HTMLDivElement | null>(null);
+  const [isGeneratingPortrait, setIsGeneratingPortrait] = useState(false);
+  const [portraitStatus, setPortraitStatus] = useState<string | null>(null);
 
   if (!isOpen || !character) return null;
 
@@ -42,6 +62,51 @@ export const TurnaroundModal: React.FC<TurnaroundModalProps> = ({ character, isO
       a.click();
     };
     img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+  };
+
+  const handleDownloadMasterPortrait = () => {
+    if (!character.imageUrl) return;
+    const a = document.createElement('a');
+    a.href = character.imageUrl;
+    a.download = 'master_character.png';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  const handleGenerateMasterPortrait = async () => {
+    setIsGeneratingPortrait(true);
+    setPortraitStatus('Generating 8K Studio Portrait via Imagen 3...');
+
+    try {
+      const res = await fetch('/api/characters/generate-portrait', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          characterName: character.name,
+          prompt: `Studio character portrait of ${character.name}: ${character.faceDescription || character.description}. Cinematic studio lighting, photorealistic, 8k resolution.`,
+          aspectRatio: '16:9',
+        }),
+      });
+
+      if (!res.ok) throw new Error('Portrait generation request failed');
+      const data = await res.json();
+
+      if (data.imageUrl && onUpdateCharacter) {
+        onUpdateCharacter(character.id, {
+          imageUrl: data.imageUrl,
+        });
+      }
+
+      setPortraitStatus('Master Character Portrait locked! (master_character.png)');
+      setTimeout(() => setPortraitStatus(null), 3500);
+    } catch (err: any) {
+      console.warn('Failed to generate portrait:', err);
+      setPortraitStatus('Error generating portrait. Try again.');
+      setTimeout(() => setPortraitStatus(null), 3000);
+    } finally {
+      setIsGeneratingPortrait(false);
+    }
   };
 
   return (
@@ -85,6 +150,15 @@ export const TurnaroundModal: React.FC<TurnaroundModalProps> = ({ character, isO
 
           <div className="flex items-center gap-2">
             <button
+              onClick={handleGenerateMasterPortrait}
+              disabled={isGeneratingPortrait}
+              className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500/20 to-amber-600/30 hover:from-amber-500/30 hover:to-amber-600/40 text-amber-300 border border-amber-500/50 text-xs font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_12px_rgba(251,191,36,0.2)] disabled:opacity-50"
+              title="Generate 8K Master Character Portrait via Imagen 3"
+            >
+              <Sparkles className={`w-3.5 h-3.5 ${isGeneratingPortrait ? 'animate-spin' : ''}`} />
+              <span>{isGeneratingPortrait ? 'Synthesizing...' : 'Generate Portrait (Imagen 3)'}</span>
+            </button>
+            <button
               onClick={handleDownloadSheet}
               className="px-3 py-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-xs font-mono font-medium flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_10px_rgba(0,240,255,0.15)]"
             >
@@ -102,6 +176,63 @@ export const TurnaroundModal: React.FC<TurnaroundModalProps> = ({ character, isO
 
         {/* Content Area */}
         <div ref={sheetContainerRef} className="p-5 overflow-y-auto space-y-5 custom-scrollbar">
+          {portraitStatus && (
+            <div className="p-2.5 rounded-xl bg-amber-950/40 border border-amber-500/40 text-xs font-mono text-amber-300 flex items-center justify-between animate-in fade-in">
+              <span className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
+                {portraitStatus}
+              </span>
+              {character.imageUrl && (
+                <button
+                  onClick={handleDownloadMasterPortrait}
+                  className="px-2 py-0.5 rounded bg-amber-500 text-black font-bold text-[10px] hover:bg-amber-400 transition-colors"
+                >
+                  Download master_character.png
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Master Reference Portrait Card (Imagen 3 Model Lock) */}
+          <div className="bg-[#0b0e18] border border-amber-500/30 rounded-xl p-4 flex flex-col md:flex-row items-center gap-4 shadow-[0_0_25px_rgba(251,191,36,0.08)]">
+            <div className="relative w-44 h-32 md:w-56 md:h-36 rounded-lg overflow-hidden border border-amber-500/40 shrink-0 bg-black/60 shadow-lg group">
+              <img
+                src={character.imageUrl || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=400&q=80'}
+                alt={character.name}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              />
+              <div className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded bg-black/80 border border-amber-400/50 text-[9px] font-mono text-amber-300 font-bold flex items-center gap-1 backdrop-blur-sm">
+                <Sparkles className="w-2.5 h-2.5" />
+                <span>Imagen 3 Lock</span>
+              </div>
+            </div>
+
+            <div className="flex-1 space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-bold text-white font-mono uppercase tracking-wider flex items-center gap-1.5">
+                    <Shield className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Master Reference Portrait (master_character.png)</span>
+                  </h4>
+                  <p className="text-[11px] text-zinc-400 mt-0.5 font-sans">
+                    Conditioning anchor used across Google Veo image-to-video scene prompts to maintain temporal facial identity.
+                  </p>
+                </div>
+                <button
+                  onClick={handleDownloadMasterPortrait}
+                  className="px-2.5 py-1 rounded bg-[#151c2e] hover:bg-[#1e2740] border border-amber-500/30 text-amber-300 text-xs font-mono flex items-center gap-1 transition-all cursor-pointer shrink-0"
+                >
+                  <Download className="w-3 h-3" />
+                  <span>Download .png</span>
+                </button>
+              </div>
+
+              <div className="p-2.5 rounded-lg bg-black/50 border border-zinc-800 text-[10px] text-zinc-300 font-mono leading-relaxed">
+                <span className="text-amber-400 font-bold block mb-0.5">Prompt Blueprint:</span>
+                "{character.faceDescription || character.description}, cinematic studio lighting, photorealistic, 8k resolution."
+              </div>
+            </div>
+          </div>
           {/* Main Visual Turnaround Graphic (SVG Blueprint Sheet) */}
           <div className="w-full bg-[#05070d] border border-cyan-500/30 rounded-xl p-4 shadow-inner overflow-hidden relative">
             <svg
