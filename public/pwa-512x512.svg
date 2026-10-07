@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#030712"/>
+    </radialGradient>
+    <linearGradient id="neonCyan" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="50%" stop-color="#00f0ff"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </linearGradient>
+    <linearGradient id="goldAmber" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fde047"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect width="504" height="504" x="4" y="4" rx="108" fill="none" stroke="url(#neonCyan)" stroke-width="4" stroke-opacity="0.3"/>
+
+  <!-- Clapperboard Outline / Film Slate -->
+  <g transform="translate(96, 106)" filter="url(#glow)">
+    <!-- Slate Base Box -->
+    <rect x="0" y="100" width="320" height="210" rx="24" fill="#090d16" stroke="#00f0ff" stroke-width="6"/>
+
+    <!-- Clapper Top Stick (Tilted) -->
+    <g transform="rotate(-12, 10, 80)">
+      <rect x="0" y="30" width="320" height="56" rx="12" fill="#0c1322" stroke="url(#neonCyan)" stroke-width="5"/>
+      <!-- Slanted Stripes -->
+      <polygon points="40,32 75,32 45,84 10,84" fill="url(#neonCyan)"/>
+      <polygon points="110,32 145,32 115,84 80,84" fill="url(#neonCyan)"/>
+      <polygon points="180,32 215,32 185,84 150,84" fill="url(#neonCyan)"/>
+      <polygon points="250,32 285,32 255,84 220,84" fill="url(#goldAmber)"/>
+    </g>
+
+    <!-- Play Symbol / Film Reel Portal in center -->
+    <circle cx="160" cy="205" r="54" fill="#030712" stroke="url(#neonCyan)" stroke-width="4" stroke-dasharray="6,4"/>
+    <polygon points="146,180 188,205 146,230" fill="url(#goldAmber)"/>
+
+    <!-- Sound Wavebars at bottom of slate -->
+    <rect x="50" y="275" width="8" height="18" rx="4" fill="#00f0ff"/>
+    <rect x="70" y="265" width="8" height="28" rx="4" fill="#00f0ff"/>
+    <rect x="90" y="270" width="8" height="23" rx="4" fill="#00f0ff"/>
+    <rect x="222" y="270" width="8" height="23" rx="4" fill="#f59e0b"/>
+    <rect x="242" y="263" width="8" height="30" rx="4" fill="#f59e0b"/>
+    <rect x="262" y="275" width="8" height="18" rx="4" fill="#f59e0b"/>
+  </g>
+</svg>

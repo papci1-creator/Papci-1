@@ -63,6 +63,8 @@ interface TimelineProps {
   characters?: CharacterProfile[];
   onOpenTurnaround?: (char: CharacterProfile) => void;
   onOpenBatchAudio?: () => void;
+  onOpenTransitions?: () => void;
+  onOpenCostumeLock?: () => void;
 }
 
 export const TIME_OF_DAY_OPTIONS: {
@@ -262,6 +264,8 @@ export const Timeline: React.FC<TimelineProps> = ({
   characters = [],
   onOpenTurnaround,
   onOpenBatchAudio,
+  onOpenTransitions,
+  onOpenCostumeLock,
 }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [previewingVoiceId, setPreviewingVoiceId] = useState<string | null>(null);
@@ -638,6 +642,30 @@ export const Timeline: React.FC<TimelineProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Transition Effects Studio Modal Button */}
+          {onOpenTransitions && (
+            <button
+              onClick={onOpenTransitions}
+              className="px-2.5 py-1 rounded-md text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/35 flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_12px_rgba(251,191,36,0.15)]"
+              title="Open Transition Effects Studio"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>Transitions</span>
+            </button>
+          )}
+
+          {/* Character Costume Locks Modal Button */}
+          {onOpenCostumeLock && (
+            <button
+              onClick={onOpenCostumeLock}
+              className="px-2.5 py-1 rounded-md text-xs font-semibold bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/35 flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_12px_rgba(0,240,255,0.15)]"
+              title="Manage Character Costume Locks for visual continuity"
+            >
+              <Lock className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Costume Locks</span>
+            </button>
+          )}
+
           {/* Batch Audio Generator Button */}
           {onOpenBatchAudio && (
             <button

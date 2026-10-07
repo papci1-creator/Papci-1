@@ -13,7 +13,10 @@ import { SettingsModal } from './components/SettingsModal';
 import { TurnaroundModal } from './components/TurnaroundModal';
 import { GoogleFormsModal } from './components/GoogleFormsModal';
 import { BatchAudioModal } from './components/BatchAudioModal';
-import { Scene, AspectRatio, PresetStory, CharacterProfile } from './types';
+import { TransitionModal } from './components/TransitionModal';
+import { CostumeLockModal } from './components/CostumeLockModal';
+import { InstallPromptBanner } from './components/InstallPromptBanner';
+import { Scene, AspectRatio, PresetStory, CharacterProfile, TransitionEffect } from './types';
 import { PRESET_STORIES, VISUAL_STYLES, VIDEO_GENERATORS, VOICE_ACTORS, MUSIC_STYLES, SAMPLE_VIDEO_CLIPS, DEFAULT_CHARACTERS } from './data/presets';
 import { audioEngine } from './utils/audioEngine';
 import { parseStoryNLP, compileUnifiedVideoPrompt } from './utils/nlpParser';
@@ -39,6 +42,8 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isGoogleFormsOpen, setIsGoogleFormsOpen] = useState(false);
   const [isBatchAudioOpen, setIsBatchAudioOpen] = useState(false);
+  const [isTransitionsOpen, setIsTransitionsOpen] = useState(false);
+  const [isCostumeLockOpen, setIsCostumeLockOpen] = useState(false);
   const [useLiveVideoPreview, setUseLiveVideoPreview] = useState(true);
 
   // Characters & Reference Manager State
@@ -619,6 +624,9 @@ export default function App() {
 
   return (
     <div className="h-screen w-screen flex flex-col bg-[#08090e] text-zinc-100 font-sans overflow-hidden select-none">
+      {/* PWA & Mobile Android Install Banner */}
+      <InstallPromptBanner appName="StoryCast AI Pro" />
+
       {/* 1. Top Global Navigation Header */}
       <Header
         projectTitle={projectTitle}
@@ -713,7 +721,14 @@ export default function App() {
               onAddScene={handleAddScene}
               onSeekToScene={(scene) => setCurrentTime(scene.startTime)}
               isPlaying={isPlaying}
+              characters={characters}
+              onOpenTurnaround={(char) => {
+                setTurnaroundCharacter(char);
+                setIsTurnaroundOpen(true);
+              }}
               onOpenBatchAudio={() => setIsBatchAudioOpen(true)}
+              onOpenTransitions={() => setIsTransitionsOpen(true)}
+              onOpenCostumeLock={() => setIsCostumeLockOpen(true)}
             />
           </div>
         </div>
@@ -769,6 +784,56 @@ export default function App() {
         scenes={scenes}
         onBatchUpdateScenes={(updated) => {
           setScenes(updated);
+        }}
+      />
+
+      {/* 8. Cinematic Transition FX Studio Modal */}
+      <TransitionModal
+        isOpen={isTransitionsOpen}
+        onClose={() => setIsTransitionsOpen(false)}
+        selectedEffect={scenes[currentSceneIndex]?.transitionEffect || 'Dissolve'}
+        sceneCount={scenes.length}
+        onSelectEffect={(effect: TransitionEffect) => {
+          const currentId = scenes[currentSceneIndex]?.id;
+          if (currentId) {
+            handleUpdateScene(currentId, { transitionEffect: effect });
+          }
+        }}
+        onApplyToAllScenes={(effect: TransitionEffect) => {
+          setScenes((prev) => prev.map((s) => ({ ...s, transitionEffect: effect })));
+        }}
+      />
+
+      {/* 9. Character Costume Locks Continuity Sheet Modal */}
+      <CostumeLockModal
+        isOpen={isCostumeLockOpen}
+        onClose={() => setIsCostumeLockOpen(false)}
+        characters={characters}
+        scenes={scenes}
+        onUpdateCharacter={(id, updates) => {
+          setCharacters((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c)));
+        }}
+        onApplyCostumeLockToScenes={(charId, lock) => {
+          setScenes((prev) =>
+            prev.map((s) => {
+              if (s.characterId === charId || s.characterName === characters.find((c) => c.id === charId)?.name) {
+                const currentPrompt = s.videoPrompt;
+                const hasExistingLock = currentPrompt.includes('[COSTUME LOCK:');
+                let updatedPrompt = currentPrompt;
+                if (hasExistingLock) {
+                  updatedPrompt = currentPrompt.replace(/\[COSTUME LOCK:[^\]]+\]/g, lock);
+                } else {
+                  updatedPrompt = `${lock} ${currentPrompt}`;
+                }
+                return {
+                  ...s,
+                  costumeLock: lock,
+                  videoPrompt: updatedPrompt,
+                };
+              }
+              return s;
+            })
+          );
         }}
       />
     </div>
