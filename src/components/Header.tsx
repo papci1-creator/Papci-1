@@ -1,5 +1,5 @@
 import React from 'react';
-import { Film, Sparkles, Download, Volume2, Clapperboard, Layers, Music, Settings, FileText } from 'lucide-react';
+import { Film, Sparkles, Download, Volume2, Clapperboard, Layers, Music, Settings, FileText, Mail } from 'lucide-react';
 import { PRESET_STORIES } from '../data/presets';
 import { PresetStory } from '../types';
 
@@ -14,6 +14,7 @@ interface HeaderProps {
   musicPlaying: boolean;
   onOpenSettings?: () => void;
   onOpenGoogleForms?: () => void;
+  onOpenGmail?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -27,6 +28,7 @@ export const Header: React.FC<HeaderProps> = ({
   musicPlaying,
   onOpenSettings,
   onOpenGoogleForms,
+  onOpenGmail,
 }) => {
   const formatTime = (secs: number) => {
     const m = Math.floor(secs / 60);
@@ -124,6 +126,18 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <FileText className="w-3.5 h-3.5 text-purple-400" />
             <span className="hidden md:inline">Google Forms</span>
+          </button>
+        )}
+
+        {/* Gmail Studio Button */}
+        {onOpenGmail && (
+          <button
+            onClick={onOpenGmail}
+            title="Gmail - Send Storyboard Pitches & Wardrobe Continuity"
+            className="px-3 py-1.5 rounded-lg bg-[#0e121d] hover:bg-red-950/30 text-red-300 hover:text-red-200 border border-zinc-800 hover:border-red-500/40 text-xs font-mono font-medium flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_12px_rgba(239,68,68,0.15)]"
+          >
+            <Mail className="w-3.5 h-3.5 text-red-400" />
+            <span className="hidden md:inline">Gmail</span>
           </button>
         )}
 

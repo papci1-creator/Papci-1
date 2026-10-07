@@ -15,6 +15,7 @@ import { GoogleFormsModal } from './components/GoogleFormsModal';
 import { BatchAudioModal } from './components/BatchAudioModal';
 import { TransitionModal } from './components/TransitionModal';
 import { CostumeLockModal } from './components/CostumeLockModal';
+import { GmailModal } from './components/GmailModal';
 import { InstallPromptBanner } from './components/InstallPromptBanner';
 import { Scene, AspectRatio, PresetStory, CharacterProfile, TransitionEffect } from './types';
 import { PRESET_STORIES, VISUAL_STYLES, VIDEO_GENERATORS, VOICE_ACTORS, MUSIC_STYLES, SAMPLE_VIDEO_CLIPS, DEFAULT_CHARACTERS } from './data/presets';
@@ -44,6 +45,7 @@ export default function App() {
   const [isBatchAudioOpen, setIsBatchAudioOpen] = useState(false);
   const [isTransitionsOpen, setIsTransitionsOpen] = useState(false);
   const [isCostumeLockOpen, setIsCostumeLockOpen] = useState(false);
+  const [isGmailOpen, setIsGmailOpen] = useState(false);
   const [useLiveVideoPreview, setUseLiveVideoPreview] = useState(true);
 
   // Characters & Reference Manager State
@@ -639,6 +641,7 @@ export default function App() {
         musicPlaying={musicStyle !== 'None'}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenGoogleForms={() => setIsGoogleFormsOpen(true)}
+        onOpenGmail={() => setIsGmailOpen(true)}
       />
 
       {/* 2. Workspace Split: Two-Column Layout */}
@@ -741,6 +744,7 @@ export default function App() {
         scenes={scenes}
         aspectRatio={aspectRatio}
         musicStyle={musicStyle}
+        onOpenGmail={() => setIsGmailOpen(true)}
       />
 
       {/* 4. Settings & API Environment Configuration Modal */}
@@ -835,6 +839,15 @@ export default function App() {
             })
           );
         }}
+      />
+
+      {/* 10. Gmail Communications & Studio Pitch Modal */}
+      <GmailModal
+        isOpen={isGmailOpen}
+        onClose={() => setIsGmailOpen(false)}
+        projectTitle={projectTitle}
+        scenes={scenes}
+        characters={characters}
       />
     </div>
   );

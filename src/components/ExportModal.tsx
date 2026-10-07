@@ -12,6 +12,7 @@ import {
   Volume2,
   FileCode,
   Copy,
+  Mail,
 } from 'lucide-react';
 import { Scene, AspectRatio } from '../types';
 import { exportMasterVideo, ExportProgress } from '../utils/exportMaster';
@@ -22,6 +23,7 @@ interface ExportModalProps {
   scenes: Scene[];
   aspectRatio: AspectRatio;
   musicStyle: string;
+  onOpenGmail?: () => void;
 }
 
 export const ExportModal: React.FC<ExportModalProps> = ({
@@ -30,6 +32,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   scenes,
   aspectRatio,
   musicStyle,
+  onOpenGmail,
 }) => {
   const [activeTab, setActiveTab] = useState<'video' | 'python'>('video');
   const [isExporting, setIsExporting] = useState(false);
@@ -514,25 +517,43 @@ print("\nFinal story video with synchronized voiceover generated: story_with_nar
         </div>
 
         {/* Footer Actions */}
-        <div className="px-6 py-4 bg-[#111726] border-t border-zinc-850 flex items-center justify-end gap-3">
-          <button
-            onClick={onClose}
-            disabled={isExporting}
-            className="px-4 py-2 rounded-xl text-xs font-semibold text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
-          >
-            {downloadUrl ? 'Done' : 'Cancel'}
-          </button>
-
-          {!downloadUrl && (
+        <div className="px-6 py-4 bg-[#111726] border-t border-zinc-850 flex items-center justify-between gap-3">
+          {onOpenGmail ? (
             <button
-              onClick={handleStartExport}
-              disabled={isExporting || scenes.length === 0}
-              className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-extrabold text-xs uppercase tracking-wider flex items-center gap-2 shadow-[0_0_20px_rgba(255,170,0,0.35)] transition-all cursor-pointer disabled:opacity-40"
+              onClick={() => {
+                onClose();
+                onOpenGmail();
+              }}
+              title="Compose pitch with scene breakdown and email via Gmail"
+              className="px-3.5 py-2 rounded-xl bg-red-950/40 hover:bg-red-900/40 text-red-300 border border-red-800/50 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
             >
-              <Download className="w-4 h-4" />
-              <span>{isExporting ? 'Encoding Master...' : 'Start Master Export'}</span>
+              <Mail className="w-3.5 h-3.5 text-red-400" />
+              <span>Pitch via Gmail</span>
             </button>
+          ) : (
+            <div />
           )}
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onClose}
+              disabled={isExporting}
+              className="px-4 py-2 rounded-xl text-xs font-semibold text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+            >
+              {downloadUrl ? 'Done' : 'Cancel'}
+            </button>
+
+            {!downloadUrl && (
+              <button
+                onClick={handleStartExport}
+                disabled={isExporting || scenes.length === 0}
+                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-extrabold text-xs uppercase tracking-wider flex items-center gap-2 shadow-[0_0_20px_rgba(255,170,0,0.35)] transition-all cursor-pointer disabled:opacity-40"
+              >
+                <Download className="w-4 h-4" />
+                <span>{isExporting ? 'Encoding Master...' : 'Start Master Export'}</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

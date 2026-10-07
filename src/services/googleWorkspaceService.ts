@@ -80,6 +80,136 @@ export async function listGmailMessages(
 }
 
 /**
+ * Get authenticated user's Gmail profile
+ */
+export async function getUserGmailProfile(accessToken: string): Promise<{
+  emailAddress: string;
+  messagesTotal: number;
+  threadsTotal: number;
+}> {
+  const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `Gmail Profile error (${res.status})`);
+  }
+  return await res.json();
+}
+
+/**
+ * Get detailed message content by ID
+ */
+export async function getGmailMessageDetails(
+  accessToken: string,
+  messageId: string
+): Promise<{
+  id: string;
+  threadId: string;
+  snippet: string;
+  subject: string;
+  from: string;
+  to: string;
+  date: string;
+  body: string;
+}> {
+  const res = await fetch(
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`,
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `Failed to fetch message details (${res.status})`);
+  }
+  const data = await res.json();
+  const headers = data.payload?.headers || [];
+  const subject = headers.find((h: any) => h.name.toLowerCase() === 'subject')?.value || '(No Subject)';
+  const from = headers.find((h: any) => h.name.toLowerCase() === 'from')?.value || 'Unknown';
+  const to = headers.find((h: any) => h.name.toLowerCase() === 'to')?.value || '';
+  const date = headers.find((h: any) => h.name.toLowerCase() === 'date')?.value || '';
+
+  // Extract body text
+  let body = data.snippet || '';
+  const extractTextPart = (part: any): string => {
+    if (part.mimeType === 'text/plain' && part.body?.data) {
+      try {
+        return atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/'));
+      } catch {
+        return '';
+      }
+    }
+    if (part.parts && Array.isArray(part.parts)) {
+      for (const subPart of part.parts) {
+        const text = extractTextPart(subPart);
+        if (text) return text;
+      }
+    }
+    return '';
+  };
+
+  const parsedBody = extractTextPart(data.payload);
+  if (parsedBody) {
+    body = parsedBody;
+  }
+
+  return {
+    id: data.id,
+    threadId: data.threadId,
+    snippet: data.snippet || '',
+    subject,
+    from,
+    to,
+    date,
+    body,
+  };
+}
+
+/**
+ * Create a draft email in Gmail
+ */
+export async function createGmailDraft(
+  accessToken: string,
+  to: string,
+  subject: string,
+  bodyText: string
+): Promise<{ id: string; message: { id: string; threadId: string } }> {
+  const utf8Subject = `=?utf-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`;
+  const emailLines = [
+    to ? `To: ${to}` : '',
+    `Subject: ${utf8Subject}`,
+    'MIME-Version: 1.0',
+    'Content-Type: text/plain; charset=UTF-8',
+    'Content-Transfer-Encoding: 7bit',
+    '',
+    bodyText,
+  ].filter((line, idx) => idx > 0 || line !== '');
+
+  const emailRaw = emailLines.join('\r\n');
+  const base64Safe = btoa(unescape(encodeURIComponent(emailRaw)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+
+  const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/drafts', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ message: { raw: base64Safe } }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `Failed to create Gmail draft (${res.status})`);
+  }
+
+  return await res.json();
+}
+
+/**
  * Send an email via Gmail API
  * Note: requires explicit user confirmation before calling per destructive/mutating policy
  */
