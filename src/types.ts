@@ -69,7 +69,7 @@ export interface Scene {
   audioUrl?: string; // Generated narration audio file (Data URL, Blob URL, or WAV)
   audioDuration?: number; // Exact synthesized audio duration in seconds
   isAudioGenerated?: boolean; // Flag indicating high-fidelity TTS audio file is generated
-  audioFormat?: 'wav' | 'mp3' | 'aac';
+  audioFormat?: 'wav' | 'mp3' | 'aac' | 'webm' | 'ogg';
   transitionEffect?: TransitionEffect;
   videoUrl?: string; // Live preview placeholder video clip URL or open-source loop
   characterId?: string; // ID of linked CharacterProfile
@@ -86,11 +86,25 @@ export interface Scene {
   detectedCharacters?: string[]; // Character tags/names auto-detected in this scene
   sceneLocation?: string; // Location or environment (e.g. 'Neo-Tokyo Sublevel 4', 'Orbital Deck')
   timeOfDay?: TimeOfDay | string; // Lighting & temporal setting (e.g. 'Night', 'Golden Hour', 'Dawn')
+  backgroundImage?: string; // Custom background asset URL (Data URL, SVG, or generated image)
+  backgroundAssetId?: string; // ID of chosen background asset from catalog
+  backgroundPrompt?: string; // User prompt or descriptive specs for the background
+  backgroundStyle?: string; // Visual style of background
   status: 'queued' | 'rendering' | 'ready' | 'error';
   progress: number;
   generationPhase: string;
   visualTheme: VisualTheme;
   seed: number;
+}
+
+export interface BackgroundAsset {
+  id: string;
+  name: string;
+  category: 'Cyberpunk' | 'Sci-Fi' | 'Fantasy' | 'Cinematic' | 'Anime' | 'Studio' | 'Action';
+  description: string;
+  imageUrl: string;
+  prompt: string;
+  colorPalette: string[];
 }
 
 export type TimeOfDay = 'Dawn' | 'Day' | 'Golden Hour' | 'Dusk' | 'Night' | 'Midnight';

@@ -24,6 +24,7 @@ import {
   signInWithGoogle,
   signOutGoogle,
   getCachedAccessToken,
+  GMAIL_SCOPES,
   auth,
 } from '../services/firebaseAuth';
 import {
@@ -166,7 +167,7 @@ export const GmailModal: React.FC<GmailModalProps> = ({
     setIsLoading(true);
     setErrorMsg(null);
     try {
-      const { user, accessToken: token } = await signInWithGoogle();
+      const { user, accessToken: token } = await signInWithGoogle(GMAIL_SCOPES);
       setCurrentUser(user);
       setAccessToken(token);
       setSuccessMsg(`Connected as ${user.displayName || user.email}`);

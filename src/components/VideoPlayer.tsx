@@ -237,6 +237,24 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   ]);
 
   // Master Playback Timer Clock
+  // Helper to play either custom user recorded voice (audioUrl) or synthetic narration (TTS)
+  const playSceneAudio = (scene?: Scene) => {
+    if (!scene) return;
+    if (scene.audioUrl) {
+      audioEngine.playAudioClip(scene.audioUrl, scene.audioVolume ?? 1.0);
+    } else if (scene.voiceoverText) {
+      audioEngine.speakNarration(
+        scene.voiceoverText,
+        scene.voiceActor,
+        undefined,
+        undefined,
+        scene.audioVolume ?? 1.0,
+        scene.voicePitch,
+        scene.voiceRate
+      );
+    }
+  };
+
   useEffect(() => {
     let interval: any;
     if (isPlaying) {
@@ -247,6 +265,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           if (next >= totalDuration) {
             if (isLooping) {
               setCurrentSceneIndex(0);
+              playSceneAudio(scenes[0]);
               return 0;
             } else {
               setIsPlaying(false);
@@ -258,19 +277,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           const foundIdx = scenes.findIndex((s) => next >= s.startTime && next < s.endTime);
           if (foundIdx !== -1 && foundIdx !== currentSceneIndex) {
             setCurrentSceneIndex(foundIdx);
-            // Trigger narration voiceover for the new scene
+            // Trigger narration or recorded voice for the new scene
             const newScene = scenes[foundIdx];
-            if (newScene && newScene.voiceoverText) {
-              audioEngine.speakNarration(
-                newScene.voiceoverText,
-                newScene.voiceActor,
-                undefined,
-                undefined,
-                newScene.audioVolume ?? 1.0,
-                newScene.voicePitch,
-                newScene.voiceRate
-              );
-            }
+            playSceneAudio(newScene);
           }
 
           // Evaluate automated audio ducking at the current timeline timestamp
@@ -310,17 +319,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       if (musicStyle !== 'None') {
         audioEngine.startMusic(musicStyle);
       }
-      if (activeScene && activeScene.voiceoverText) {
-        audioEngine.speakNarration(
-          activeScene.voiceoverText,
-          activeScene.voiceActor,
-          undefined,
-          undefined,
-          activeScene.audioVolume ?? 1.0,
-          activeScene.voicePitch,
-          activeScene.voiceRate
-        );
-      }
+      playSceneAudio(activeScene);
     } else {
       audioEngine.stopNarration();
     }
@@ -332,15 +331,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       setCurrentSceneIndex(prevIdx);
       setCurrentTime(scenes[prevIdx].startTime);
       if (isPlaying) {
-        audioEngine.speakNarration(
-          scenes[prevIdx].voiceoverText,
-          scenes[prevIdx].voiceActor,
-          undefined,
-          undefined,
-          scenes[prevIdx].audioVolume ?? 1.0,
-          scenes[prevIdx].voicePitch,
-          scenes[prevIdx].voiceRate
-        );
+        playSceneAudio(scenes[prevIdx]);
       }
     } else {
       setCurrentTime(0);
@@ -353,15 +344,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       setCurrentSceneIndex(nextIdx);
       setCurrentTime(scenes[nextIdx].startTime);
       if (isPlaying) {
-        audioEngine.speakNarration(
-          scenes[nextIdx].voiceoverText,
-          scenes[nextIdx].voiceActor,
-          undefined,
-          undefined,
-          scenes[nextIdx].audioVolume ?? 1.0,
-          scenes[nextIdx].voicePitch,
-          scenes[nextIdx].voiceRate
-        );
+        playSceneAudio(scenes[nextIdx]);
       }
     }
   };

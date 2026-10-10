@@ -38,6 +38,7 @@ import {
   Zap,
   EyeOff,
   MoveHorizontal,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { Scene, TransitionEffect, CharacterProfile, TimeOfDay } from '../types';
 import { renderCinematicFrame } from '../utils/canvasRenderer';
@@ -65,6 +66,8 @@ interface TimelineProps {
   onOpenBatchAudio?: () => void;
   onOpenTransitions?: () => void;
   onOpenCostumeLock?: () => void;
+  onOpenBackgroundGenerator?: (sceneId?: string) => void;
+  onOpenVoiceRecorder?: (sceneId?: string) => void;
 }
 
 export const TIME_OF_DAY_OPTIONS: {
@@ -266,6 +269,8 @@ export const Timeline: React.FC<TimelineProps> = ({
   onOpenBatchAudio,
   onOpenTransitions,
   onOpenCostumeLock,
+  onOpenBackgroundGenerator,
+  onOpenVoiceRecorder,
 }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [previewingVoiceId, setPreviewingVoiceId] = useState<string | null>(null);
@@ -273,8 +278,7 @@ export const Timeline: React.FC<TimelineProps> = ({
 
   // Drag and drop reordering states
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-  const [dropPosition, setDropPosition] = useState<'before' | 'after' | null>(null);
+  const [targetDropSlot, setTargetDropSlot] = useState<number | null>(null);
 
   // Bulk Edit Mode States
   const [isBulkMode, setIsBulkMode] = useState(false);
@@ -398,59 +402,101 @@ export const Timeline: React.FC<TimelineProps> = ({
     triggerFeedback(`Moved Scene #${fromIndex + 1} to Position #${toIndex + 1} (Timestamps auto-calculated)`);
   };
 
+  // Calculate destination index in final array for a given target slot
+  const calculateDestinationIndex = (dragged: number, slot: number): number => {
+    return slot > dragged ? slot - 1 : slot;
+  };
+
   // Drag and drop event handlers
   const handleDragStart = (e: React.DragEvent, index: number) => {
+    if (isBulkMode) {
+      e.preventDefault();
+      return;
+    }
+    const target = e.target as HTMLElement;
+    // Don't initiate drag if clicking on interactive elements (inputs, textareas, sliders, buttons)
+    if (target.closest('input, textarea, select, button, [role="slider"]')) {
+      e.preventDefault();
+      return;
+    }
     setDraggedIndex(index);
+    setTargetDropSlot(null);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', index.toString());
   };
 
-  const handleDragOver = (e: React.DragEvent, index: number) => {
+  const handleCardDragOver = (e: React.DragEvent, index: number) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
 
-    if (draggedIndex === null || draggedIndex === index) {
-      setDragOverIndex(null);
-      setDropPosition(null);
-      return;
-    }
+    if (draggedIndex === null) return;
 
     const rect = e.currentTarget.getBoundingClientRect();
     const midX = rect.left + rect.width / 2;
-    setDragOverIndex(index);
-    setDropPosition(e.clientX < midX ? 'before' : 'after');
+    const isLeftHalf = e.clientX < midX;
+    const slot = isLeftHalf ? index : index + 1;
+    setTargetDropSlot(slot);
   };
 
-  const handleDrop = (e: React.DragEvent, targetIndex: number) => {
+  const handleSlotDragOver = (e: React.DragEvent, slot: number) => {
     e.preventDefault();
-    if (draggedIndex === null || draggedIndex === targetIndex) {
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+    setTargetDropSlot(slot);
+  };
+
+  const handleDropAtSlot = (slot: number) => {
+    if (draggedIndex === null) return;
+
+    // Dropping in the slot before or after the item's current position doesn't move it
+    if (slot === draggedIndex || slot === draggedIndex + 1) {
       setDraggedIndex(null);
-      setDragOverIndex(null);
-      setDropPosition(null);
+      setTargetDropSlot(null);
       return;
     }
 
-    let newIdx = targetIndex;
-    if (dropPosition === 'after' && draggedIndex < targetIndex) {
-      newIdx = targetIndex;
-    } else if (dropPosition === 'after' && draggedIndex > targetIndex) {
-      newIdx = targetIndex + 1;
-    } else if (dropPosition === 'before' && draggedIndex < targetIndex) {
-      newIdx = targetIndex - 1;
-    }
-
-    newIdx = Math.max(0, Math.min(scenes.length - 1, newIdx));
-    handleReorder(draggedIndex, newIdx);
+    const destinationIndex = calculateDestinationIndex(draggedIndex, slot);
+    handleReorder(draggedIndex, destinationIndex);
 
     setDraggedIndex(null);
-    setDragOverIndex(null);
-    setDropPosition(null);
+    setTargetDropSlot(null);
+  };
+
+  const handleCardDrop = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (draggedIndex === null) return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const midX = rect.left + rect.width / 2;
+    const isLeftHalf = e.clientX < midX;
+    const slot = isLeftHalf ? index : index + 1;
+
+    handleDropAtSlot(slot);
   };
 
   const handleDragEnd = () => {
     setDraggedIndex(null);
-    setDragOverIndex(null);
-    setDropPosition(null);
+    setTargetDropSlot(null);
+  };
+
+  // Horizontal auto-scroll during drag
+  const handleTimelineDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (draggedIndex === null || !timelineScrollRef.current) return;
+
+    const container = timelineScrollRef.current;
+    const rect = container.getBoundingClientRect();
+    const threshold = 120;
+    const clientX = e.clientX;
+
+    if (clientX < rect.left + threshold) {
+      const factor = Math.max(0.2, (rect.left + threshold - clientX) / threshold);
+      container.scrollLeft -= Math.round(18 * factor);
+    } else if (clientX > rect.right - threshold) {
+      const factor = Math.max(0.2, (clientX - (rect.right - threshold)) / threshold);
+      container.scrollLeft += Math.round(18 * factor);
+    }
   };
 
   const formatSecs = (secs: number) => {
@@ -475,6 +521,18 @@ export const Timeline: React.FC<TimelineProps> = ({
     if (previewingVoiceId === scene.id) {
       audioEngine.stopNarration();
       setPreviewingVoiceId(null);
+      return;
+    }
+
+    // If scene has custom user recorded voice, play the recorded audio
+    if (scene.audioUrl) {
+      setPreviewingVoiceId(scene.id);
+      audioEngine.playAudioClip(
+        scene.audioUrl,
+        scene.audioVolume ?? 1.0,
+        () => setPreviewingVoiceId(scene.id),
+        () => setPreviewingVoiceId(null)
+      );
       return;
     }
 
@@ -591,6 +649,78 @@ export const Timeline: React.FC<TimelineProps> = ({
     triggerFeedback(`Deleted ${selectedSceneIds.length} scenes`);
   };
 
+  // Render visual drop landing indicator for a given gap slot between scenes
+  const renderDropIndicator = (slot: number) => {
+    if (draggedIndex === null) return null;
+
+    const isCurrentPosition = slot === draggedIndex || slot === draggedIndex + 1;
+    const isTargetSlot = targetDropSlot === slot && !isCurrentPosition;
+    const destIdx = calculateDestinationIndex(draggedIndex, slot);
+
+    if (isTargetSlot) {
+      return (
+        <div
+          key={`drop-indicator-active-${slot}`}
+          onDragOver={(e) => handleSlotDragOver(e, slot)}
+          onDrop={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleDropAtSlot(slot);
+          }}
+          className="w-12 h-[370px] shrink-0 flex flex-col items-center justify-center relative z-40 transition-all duration-200 select-none animate-in fade-in zoom-in-95"
+        >
+          {/* Floating Landing Badge with Down Chevron */}
+          <div className="absolute -top-3.5 z-50 flex flex-col items-center pointer-events-none animate-bounce">
+            <div className="px-3 py-1 rounded-full bg-cyan-400 text-black text-[10px] font-mono font-black shadow-[0_0_20px_#00f0ff] flex items-center gap-1.5 whitespace-nowrap border border-white/60">
+              <MoveHorizontal className="w-3.5 h-3.5 stroke-[3]" />
+              <span>DROP HERE · POSITION #{destIdx + 1}</span>
+            </div>
+            <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[7px] border-t-cyan-400" />
+          </div>
+
+          {/* Glowing Neon Insertion Line */}
+          <div className="relative w-2.5 h-full flex flex-col items-center">
+            {/* Ambient Glow */}
+            <div className="absolute inset-0 bg-cyan-400/40 rounded-full blur-[10px] animate-pulse" />
+            {/* Core Solid Gradient Beam */}
+            <div className="relative w-2 h-full rounded-full bg-gradient-to-b from-cyan-300 via-sky-400 to-cyan-500 shadow-[0_0_18px_#00f0ff]" />
+            {/* Center Pulsing Radar Ring */}
+            <div className="absolute top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-cyan-400/30 ring-4 ring-cyan-400/70 shadow-[0_0_20px_#00f0ff] animate-ping" />
+            <div className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full bg-white shadow-[0_0_12px_#00f0ff]" />
+          </div>
+
+          {/* Bottom Landing Pin */}
+          <div className="absolute -bottom-2.5 z-50 flex flex-col items-center pointer-events-none">
+            <div className="w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-b-[6px] border-b-cyan-400" />
+            <div className="w-3 h-3 rounded-full bg-cyan-400 shadow-[0_0_12px_#00f0ff]" />
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div
+        key={`drop-slot-${slot}`}
+        onDragOver={(e) => handleSlotDragOver(e, slot)}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          handleDropAtSlot(slot);
+        }}
+        className="w-4 h-[370px] -mx-2 shrink-0 flex items-center justify-center cursor-pointer z-30 group/slot"
+        title={!isCurrentPosition ? `Drop to place at position #${destIdx + 1}` : 'Current position'}
+      >
+        <div
+          className={`w-0.5 rounded-full transition-all ${
+            !isCurrentPosition
+              ? 'h-1/3 bg-zinc-800/80 group-hover/slot:h-3/4 group-hover/slot:w-1.5 group-hover/slot:bg-cyan-400 group-hover/slot:shadow-[0_0_12px_#00f0ff]'
+              : 'h-1/6 bg-zinc-900 opacity-20'
+          }`}
+        />
+      </div>
+    );
+  };
+
   return (
     <div className="h-full flex flex-col bg-[#080a11] text-zinc-200 select-none">
       {/* Timeline Header Track & Controls */}
@@ -606,10 +736,40 @@ export const Timeline: React.FC<TimelineProps> = ({
             ({scenes.length} Scenes Sequenced)
           </span>
 
-          <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono text-cyan-400/90 bg-cyan-950/40 px-2 py-0.5 rounded border border-cyan-500/20">
-            <GripVertical className="w-3 h-3 text-cyan-400" />
-            <span>Drag cards to reorder</span>
-          </span>
+          {/* Active Drag Reorder Status Pill or Default Drag Hint */}
+          {draggedIndex !== null ? (
+            <div className="flex items-center gap-2 bg-cyan-950/85 border border-cyan-500/70 px-2.5 py-0.5 rounded-full text-[11px] font-mono shadow-[0_0_15px_rgba(0,240,255,0.3)] animate-in fade-in">
+              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+              <span className="text-cyan-200 font-bold">
+                Reordering Scene #{draggedIndex + 1}
+              </span>
+              <ChevronRight className="w-3 h-3 text-cyan-400" />
+              {targetDropSlot !== null && targetDropSlot !== draggedIndex && targetDropSlot !== draggedIndex + 1 ? (
+                <span className="text-emerald-300 font-bold">
+                  Drop to place at Position #{calculateDestinationIndex(draggedIndex, targetDropSlot) + 1} of {scenes.length}
+                </span>
+              ) : (
+                <span className="text-zinc-400">
+                  Hover between scenes to drop
+                </span>
+              )}
+              <button
+                onClick={() => {
+                  setDraggedIndex(null);
+                  setTargetDropSlot(null);
+                }}
+                className="ml-1 text-[9px] px-1.5 py-0.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded cursor-pointer"
+                title="Cancel reordering (Esc)"
+              >
+                Cancel (Esc)
+              </button>
+            </div>
+          ) : (
+            <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono text-cyan-400/90 bg-cyan-950/40 px-2 py-0.5 rounded border border-cyan-500/20">
+              <GripVertical className="w-3 h-3 text-cyan-400" />
+              <span>Drag cards to reorder</span>
+            </span>
+          )}
 
           {/* Production Locations & Time of Day Overview */}
           {(() => {
@@ -675,6 +835,30 @@ export const Timeline: React.FC<TimelineProps> = ({
             >
               <Mic className="w-3.5 h-3.5 text-purple-400" />
               <span>Batch Audio</span>
+            </button>
+          )}
+
+          {/* Voice Recorder Studio Button */}
+          {onOpenVoiceRecorder && (
+            <button
+              onClick={() => onOpenVoiceRecorder()}
+              className="px-2.5 py-1 rounded-md text-xs font-semibold bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/35 flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_12px_rgba(244,63,94,0.15)]"
+              title="Record your voice with microphone for any scene"
+            >
+              <Mic className="w-3.5 h-3.5 text-rose-400" />
+              <span>Record Voice</span>
+            </button>
+          )}
+
+          {/* AI Background Asset Studio Button */}
+          {onOpenBackgroundGenerator && (
+            <button
+              onClick={() => onOpenBackgroundGenerator()}
+              className="px-2.5 py-1 rounded-md text-xs font-semibold bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/35 flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_12px_rgba(56,189,248,0.15)]"
+              title="Open AI Background Studio to create custom environment assets"
+            >
+              <ImageIcon className="w-3.5 h-3.5 text-sky-400" />
+              <span>Backgrounds</span>
             </button>
           )}
 
@@ -881,51 +1065,71 @@ export const Timeline: React.FC<TimelineProps> = ({
       {/* Horizontal Scrollable Timeline Area */}
       <div
         ref={timelineScrollRef}
-        className="flex-1 overflow-x-auto p-4 custom-scrollbar flex items-start gap-4 min-h-[310px]"
+        onDragOver={handleTimelineDragOver}
+        className="flex-1 overflow-x-auto p-4 custom-scrollbar flex items-start gap-3 min-h-[310px]"
       >
+        {/* Drop target slot before Scene #1 (Slot 0) */}
+        {renderDropIndicator(0)}
+
         {scenes.map((scene, index) => {
           const isSelected = currentSceneIndex === index;
           const isBulkSelected = selectedSceneIds.includes(scene.id);
           const isRendering = scene.status === 'rendering';
           const isDraggingThis = draggedIndex === index;
-          const isTargeted = dragOverIndex === index;
+
+          const isLeftTargeted =
+            targetDropSlot === index &&
+            draggedIndex !== null &&
+            draggedIndex !== index &&
+            draggedIndex !== index - 1;
+          const isRightTargeted =
+            targetDropSlot === index + 1 &&
+            draggedIndex !== null &&
+            draggedIndex !== index &&
+            draggedIndex !== index + 1;
 
           return (
-            <div
-              key={scene.id}
-              draggable={!isBulkMode}
-              onDragStart={(e) => handleDragStart(e, index)}
-              onDragOver={(e) => handleDragOver(e, index)}
-              onDrop={(e) => handleDrop(e, index)}
-              onDragEnd={handleDragEnd}
-              onClick={() => {
-                if (isBulkMode) {
-                  toggleSelectScene(scene.id);
-                } else {
-                  setCurrentSceneIndex(index);
-                  onSeekToScene(scene);
-                }
-              }}
-              className={`w-[330px] shrink-0 rounded-xl border transition-all duration-200 flex flex-col bg-[#0b0e18] shadow-lg relative cursor-pointer select-none ${
-                isDraggingThis
-                  ? 'opacity-40 scale-[0.98] border-dashed border-cyan-400 ring-2 ring-cyan-500/30'
-                  : isTargeted
-                  ? 'border-cyan-400 ring-2 ring-cyan-400 shadow-[0_0_30px_rgba(0,240,255,0.3)] bg-[#0f1528]'
-                  : isBulkSelected
-                  ? 'border-amber-400 ring-2 ring-amber-400/50 shadow-[0_0_25px_rgba(255,170,0,0.25)] bg-[#12131d]'
-                  : isSelected
-                  ? 'border-cyan-500 ring-1 ring-cyan-500/40 shadow-[0_0_20px_rgba(0,240,255,0.15)]'
-                  : 'border-zinc-800/90 hover:border-zinc-700'
-              }`}
-            >
-              {/* Visual Vertical Drop Target Insertion Indicator */}
-              {isTargeted && (
-                <div
-                  className={`absolute top-0 bottom-0 w-2 z-40 pointer-events-none rounded-full bg-cyan-400 shadow-[0_0_15px_#00f0ff] animate-pulse ${
-                    dropPosition === 'before' ? '-left-3' : '-right-3'
-                  }`}
-                />
-              )}
+            <React.Fragment key={scene.id}>
+              <div
+                draggable={!isBulkMode}
+                onDragStart={(e) => handleDragStart(e, index)}
+                onDragOver={(e) => handleCardDragOver(e, index)}
+                onDrop={(e) => handleCardDrop(e, index)}
+                onDragEnd={handleDragEnd}
+                onClick={() => {
+                  if (isBulkMode) {
+                    toggleSelectScene(scene.id);
+                  } else {
+                    setCurrentSceneIndex(index);
+                    onSeekToScene(scene);
+                  }
+                }}
+                className={`w-[330px] shrink-0 rounded-xl border transition-all duration-200 flex flex-col bg-[#0b0e18] shadow-lg relative cursor-pointer select-none ${
+                  isDraggingThis
+                    ? 'opacity-35 scale-[0.98] border-dashed border-2 border-cyan-400 ring-2 ring-cyan-500/30 bg-[#09101d]'
+                    : isLeftTargeted
+                    ? 'border-l-4 border-l-cyan-400 border-zinc-800 bg-[#0b0e18] shadow-[-10px_0_25px_rgba(0,240,255,0.25)]'
+                    : isRightTargeted
+                    ? 'border-r-4 border-r-cyan-400 border-zinc-800 bg-[#0b0e18] shadow-[10px_0_25px_rgba(0,240,255,0.25)]'
+                    : isBulkSelected
+                    ? 'border-amber-400 ring-2 ring-amber-400/50 shadow-[0_0_25px_rgba(255,170,0,0.25)] bg-[#12131d]'
+                    : isSelected
+                    ? 'border-cyan-500 ring-1 ring-cyan-500/40 shadow-[0_0_20px_rgba(0,240,255,0.15)]'
+                    : 'border-zinc-800/90 hover:border-zinc-700'
+                }`}
+              >
+                {/* Dragged Card Center Silhouette Overlay */}
+                {isDraggingThis && (
+                  <div className="absolute inset-0 bg-[#070b16]/85 backdrop-blur-[2px] rounded-xl flex flex-col items-center justify-center gap-2 z-30 p-4 text-center pointer-events-none">
+                    <GripVertical className="w-7 h-7 text-cyan-400 animate-pulse" />
+                    <span className="text-xs font-mono font-bold text-cyan-300">
+                      Moving Scene #{index + 1}
+                    </span>
+                    <span className="text-[10px] text-zinc-400">
+                      Release between scenes to place
+                    </span>
+                  </div>
+                )}
 
               {/* Scene Card Header */}
               <div className="p-3 border-b border-zinc-850 flex items-center justify-between bg-[#0e1322]/80 rounded-t-xl gap-1">
@@ -1295,6 +1499,26 @@ export const Timeline: React.FC<TimelineProps> = ({
                     </div>
                   )}
                 </div>
+
+                {/* Custom Background Asset Badge / Button */}
+                {onOpenBackgroundGenerator && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenBackgroundGenerator(scene.id);
+                    }}
+                    className={`px-2 py-0.5 rounded border text-[10px] font-mono flex items-center gap-1 transition-all cursor-pointer font-bold shrink-0 ${
+                      scene.backgroundImage
+                        ? 'bg-cyan-950/60 text-cyan-300 border-cyan-500/50 hover:border-cyan-400 shadow-[0_0_10px_rgba(0,240,255,0.2)]'
+                        : 'bg-zinc-900/80 text-zinc-400 border-zinc-750 hover:border-cyan-500/40 hover:text-cyan-300'
+                    }`}
+                    title={scene.backgroundImage ? 'Custom Background Asset Active (Click to edit)' : 'Generate custom background for this scene'}
+                  >
+                    <ImageIcon className={`w-2.5 h-2.5 ${scene.backgroundImage ? 'text-cyan-400' : 'text-zinc-400'}`} />
+                    <span>{scene.backgroundImage ? 'BG Set' : '+ BG'}</span>
+                  </button>
+                )}
               </div>
 
               {/* Scene Audio, Voice Actor & Transition Badges */}
@@ -1587,11 +1811,26 @@ export const Timeline: React.FC<TimelineProps> = ({
                             ? 'bg-rose-500/20 text-rose-300 font-bold'
                             : 'hover:text-cyan-300 text-zinc-400'
                         }`}
-                        title="Audition spoken narration with assigned voice"
+                        title={scene.audioUrl ? 'Play custom recorded voice' : 'Audition spoken narration with assigned voice'}
                       >
                         <Play className="w-2.5 h-2.5" />
-                        {previewingVoiceId === scene.id ? 'Playing' : 'Listen'}
+                        {previewingVoiceId === scene.id ? 'Playing' : scene.audioUrl ? 'Play Mic' : 'Listen'}
                       </button>
+
+                      {onOpenVoiceRecorder && (
+                        <button
+                          onClick={() => onOpenVoiceRecorder(scene.id)}
+                          className={`text-[10px] flex items-center gap-1 px-1.5 py-0.5 rounded cursor-pointer transition-colors ${
+                            scene.audioUrl
+                              ? 'bg-rose-950/60 text-rose-300 border border-rose-500/30 hover:border-rose-400'
+                              : 'hover:text-rose-300 text-zinc-400 hover:bg-zinc-800'
+                          }`}
+                          title="Record your voice with microphone for this scene"
+                        >
+                          <Mic className="w-2.5 h-2.5 text-rose-400" />
+                          <span>{scene.audioUrl ? 'Re-Record' : 'Record'}</span>
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -1822,13 +2061,29 @@ export const Timeline: React.FC<TimelineProps> = ({
                 </div>
               </div>
             </div>
+            {/* Visual drop landing indicator between this scene and the next */}
+            {renderDropIndicator(index + 1)}
+          </React.Fragment>
           );
         })}
 
-        {/* Append Scene Card */}
+        {/* Append Scene Card & End of Timeline Drop Zone */}
         <div
           onClick={onAddScene}
-          className="w-[200px] h-[350px] shrink-0 rounded-xl border border-dashed border-zinc-800 hover:border-cyan-500/60 bg-[#090c14]/50 hover:bg-cyan-950/10 flex flex-col items-center justify-center text-zinc-500 hover:text-cyan-300 transition-all cursor-pointer group"
+          onDragOver={(e) => {
+            e.preventDefault();
+            if (draggedIndex !== null) setTargetDropSlot(scenes.length);
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (draggedIndex !== null) handleDropAtSlot(scenes.length);
+          }}
+          className={`w-[200px] h-[350px] shrink-0 rounded-xl border border-dashed flex flex-col items-center justify-center transition-all cursor-pointer group ${
+            targetDropSlot === scenes.length && draggedIndex !== null && draggedIndex !== scenes.length - 1
+              ? 'border-cyan-400 bg-cyan-950/20 ring-2 ring-cyan-400 text-cyan-300 shadow-[0_0_25px_rgba(0,240,255,0.3)]'
+              : 'border-zinc-800 hover:border-cyan-500/60 bg-[#090c14]/50 hover:bg-cyan-950/10 text-zinc-500 hover:text-cyan-300'
+          }`}
         >
           <div className="w-12 h-12 rounded-full bg-zinc-900 group-hover:bg-cyan-500/20 border border-zinc-800 group-hover:border-cyan-500/40 flex items-center justify-center mb-2 transition-all">
             <Plus className="w-6 h-6 group-hover:scale-110 transition-transform" />

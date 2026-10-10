@@ -463,7 +463,65 @@ class AudioEngine {
     window.speechSynthesis.speak(utterance);
   }
 
+  private activeAudioElement: HTMLAudioElement | null = null;
+
+  public playAudioClip(
+    url: string,
+    volume: number = 1.0,
+    onStart?: () => void,
+    onEnd?: () => void
+  ) {
+    this.stopNarration();
+    try {
+      const audio = new Audio(url);
+      audio.volume = Math.max(0, Math.min(1, volume));
+      this.activeAudioElement = audio;
+
+      audio.onplay = () => {
+        this.isSpeechSpeaking = true;
+        this.applyDuckingGain(this.duckingConfig.duckingGain);
+        if (onStart) onStart();
+      };
+
+      const handleEnd = () => {
+        this.isSpeechSpeaking = false;
+        this.restoreMusicGain();
+        this.activeAudioElement = null;
+        if (onEnd) onEnd();
+      };
+
+      audio.onended = handleEnd;
+      audio.onerror = handleEnd;
+      audio.onpause = () => {
+        if (this.activeAudioElement === audio && audio.currentTime >= audio.duration) {
+          handleEnd();
+        }
+      };
+
+      audio.play().catch((err) => {
+        console.warn('Audio playback error:', err);
+        handleEnd();
+      });
+    } catch (err) {
+      console.warn('Failed to initialize audio element:', err);
+      if (onEnd) onEnd();
+    }
+  }
+
+  public stopAudioClip() {
+    if (this.activeAudioElement) {
+      try {
+        this.activeAudioElement.pause();
+        this.activeAudioElement.currentTime = 0;
+      } catch (_) {}
+      this.activeAudioElement = null;
+    }
+    this.isSpeechSpeaking = false;
+    this.restoreMusicGain();
+  }
+
   public stopNarration() {
+    this.stopAudioClip();
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }

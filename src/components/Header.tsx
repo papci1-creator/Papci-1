@@ -1,5 +1,23 @@
-import React from 'react';
-import { Film, Sparkles, Download, Volume2, Clapperboard, Layers, Music, Settings, FileText, Mail } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  Film,
+  Sparkles,
+  Download,
+  Volume2,
+  Clapperboard,
+  Layers,
+  Music,
+  Settings,
+  FileText,
+  Mail,
+  Image as ImageIcon,
+  Mic,
+  LogOut,
+  ChevronDown,
+  ShieldCheck,
+  RotateCcw,
+} from 'lucide-react';
+import { User } from 'firebase/auth';
 import { PRESET_STORIES } from '../data/presets';
 import { PresetStory } from '../types';
 
@@ -15,6 +33,12 @@ interface HeaderProps {
   onOpenSettings?: () => void;
   onOpenGoogleForms?: () => void;
   onOpenGmail?: () => void;
+  onOpenBackgroundGenerator?: () => void;
+  onOpenVoiceRecorder?: () => void;
+  currentUser?: User | null;
+  onSignInGoogle?: () => void;
+  onSignOutGoogle?: () => void;
+  isAuthLoading?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -29,7 +53,26 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSettings,
   onOpenGoogleForms,
   onOpenGmail,
+  onOpenBackgroundGenerator,
+  onOpenVoiceRecorder,
+  currentUser,
+  onSignInGoogle,
+  onSignOutGoogle,
+  isAuthLoading = false,
 }) => {
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const formatTime = (secs: number) => {
     const m = Math.floor(secs / 60);
     const s = Math.floor(secs % 60);
@@ -117,6 +160,30 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
 
+        {/* AI Background Studio / Image Generation Button */}
+        {onOpenBackgroundGenerator && (
+          <button
+            onClick={onOpenBackgroundGenerator}
+            title="AI Background Studio - Generate Custom Scene Environments"
+            className="px-3 py-1.5 rounded-lg bg-[#0e121d] hover:bg-cyan-950/30 text-cyan-300 hover:text-cyan-200 border border-zinc-800 hover:border-cyan-500/40 text-xs font-mono font-medium flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_12px_rgba(0,240,255,0.15)]"
+          >
+            <ImageIcon className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="hidden md:inline">Backgrounds</span>
+          </button>
+        )}
+
+        {/* Voice Studio / Voice Recorder Button */}
+        {onOpenVoiceRecorder && (
+          <button
+            onClick={onOpenVoiceRecorder}
+            title="Voice Recorder Studio - Record microphone audio for scenes"
+            className="px-3 py-1.5 rounded-lg bg-[#0e121d] hover:bg-rose-950/30 text-rose-300 hover:text-rose-200 border border-zinc-800 hover:border-rose-500/40 text-xs font-mono font-medium flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_12px_rgba(244,63,94,0.15)]"
+          >
+            <Mic className="w-3.5 h-3.5 text-rose-400" />
+            <span className="hidden md:inline">Voice Studio</span>
+          </button>
+        )}
+
         {/* Google Forms Integration Button */}
         {onOpenGoogleForms && (
           <button
@@ -151,6 +218,115 @@ export const Header: React.FC<HeaderProps> = ({
             <Settings className="w-4 h-4" />
           </button>
         )}
+
+        {/* Google Sign-In & User Account */}
+        {currentUser ? (
+          <div className="relative" ref={userMenuRef}>
+            <button
+              onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+              className="flex items-center gap-2 p-1 pl-1.5 rounded-lg bg-[#0e121d] hover:bg-[#141b2c] border border-zinc-800 hover:border-cyan-500/40 text-xs transition-all cursor-pointer shadow-[0_0_10px_rgba(0,0,0,0.5)]"
+              title={currentUser.email || 'Google Account'}
+            >
+              {currentUser.photoURL ? (
+                <img
+                  src={currentUser.photoURL}
+                  alt={currentUser.displayName || 'Google Profile'}
+                  className="w-6 h-6 rounded-full object-cover border border-cyan-500/40"
+                />
+              ) : (
+                <div className="w-6 h-6 rounded-full bg-cyan-950/80 border border-cyan-500/50 text-[11px] font-bold text-cyan-300 flex items-center justify-center">
+                  {(currentUser.displayName || currentUser.email || 'G')[0].toUpperCase()}
+                </div>
+              )}
+              <span className="hidden xl:inline text-zinc-200 text-xs font-medium max-w-[100px] truncate">
+                {currentUser.displayName || currentUser.email?.split('@')[0]}
+              </span>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_#10b981]" />
+              <ChevronDown className={`w-3 h-3 text-zinc-400 transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isUserMenuOpen && (
+              <div className="absolute right-0 mt-2 w-72 bg-[#0c101a] border border-cyan-500/30 rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.8)] z-50 p-3.5 space-y-3 backdrop-blur-md">
+                <div className="flex items-center gap-2.5 pb-2.5 border-b border-zinc-850">
+                  {currentUser.photoURL ? (
+                    <img
+                      src={currentUser.photoURL}
+                      alt={currentUser.displayName || 'Profile'}
+                      className="w-9 h-9 rounded-full object-cover border border-cyan-400/50"
+                    />
+                  ) : (
+                    <div className="w-9 h-9 rounded-full bg-cyan-950 border border-cyan-500 text-sm font-bold text-cyan-300 flex items-center justify-center">
+                      {(currentUser.displayName || currentUser.email || 'G')[0].toUpperCase()}
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-white truncate">
+                      {currentUser.displayName || 'Google Account'}
+                    </p>
+                    <p className="text-[11px] text-zinc-400 truncate font-mono">
+                      {currentUser.email}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-1 text-[11px] font-mono">
+                  <div className="flex items-center justify-between text-zinc-400">
+                    <span className="flex items-center gap-1.5 text-emerald-400 text-xs">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      Google Sign-In Connected
+                    </span>
+                  </div>
+                  <div className="p-2 rounded bg-[#060810] border border-zinc-850 text-[10px] text-zinc-400 space-y-1">
+                    <p className="font-semibold text-zinc-300 flex items-center gap-1">
+                      <ShieldCheck className="w-3 h-3 text-cyan-400" />
+                      <span>Authorized Scopes:</span>
+                    </p>
+                    <ul className="text-zinc-500 list-disc list-inside">
+                      <li>openid (Google ID verification)</li>
+                      <li>userinfo.email (Account email)</li>
+                      <li>userinfo.profile (Name & avatar)</li>
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-zinc-850">
+                  <button
+                    onClick={() => {
+                      setIsUserMenuOpen(false);
+                      if (onSignOutGoogle) onSignOutGoogle();
+                    }}
+                    className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-950/30 hover:bg-rose-900/40 text-rose-300 border border-rose-800/40 text-xs font-semibold transition-colors cursor-pointer"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Sign Out</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : onSignInGoogle ? (
+          <button
+            onClick={onSignInGoogle}
+            disabled={isAuthLoading}
+            title="Sign in with your Google Account"
+            className="h-8 px-2.5 rounded-lg bg-white hover:bg-zinc-100 text-zinc-800 font-medium text-xs flex items-center gap-1.5 border border-zinc-300 shadow-sm transition-all cursor-pointer active:scale-95 disabled:opacity-50 shrink-0"
+          >
+            {isAuthLoading ? (
+              <RotateCcw className="w-3.5 h-3.5 animate-spin text-zinc-600" />
+            ) : (
+              <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 48 48">
+                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+                <path fill="none" d="M0 0h48v48H0z" />
+              </svg>
+            )}
+            <span className="hidden sm:inline font-sans text-xs font-semibold text-zinc-700">
+              {isAuthLoading ? 'Connecting...' : 'Sign in'}
+            </span>
+          </button>
+        ) : null}
 
         {/* Master Export Button */}
         <button

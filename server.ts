@@ -720,7 +720,22 @@ app.post('/api/characters/generate-portrait', async (req: Request, res: Response
   }
 
   // Curated high-resolution studio pilot portrait fallback
-  const fallbackUrl = 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=1200&q=85';
+  const fallbackSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+    <defs>
+      <radialGradient id="fb-bg" cx="50%" cy="40%" r="60%">
+        <stop offset="0%" stop-color="#f97316" stop-opacity="0.3"/>
+        <stop offset="60%" stop-color="#141a29"/>
+        <stop offset="100%" stop-color="#060810"/>
+      </radialGradient>
+    </defs>
+    <rect width="800" height="600" fill="url(#fb-bg)"/>
+    <circle cx="400" cy="260" r="140" fill="#f5cbb1"/>
+    <ellipse cx="400" cy="220" rx="150" ry="120" fill="#4a150c"/>
+    <path d="M 220 600 L 280 440 L 350 400 L 450 400 L 520 440 L 580 600 Z" fill="#373d27"/>
+    <rect x="470" y="450" width="50" height="30" rx="4" fill="#ea580c"/>
+    <text x="400" y="550" font-family="monospace" font-size="14" fill="#f97316" text-anchor="middle" font-weight="bold">MASTER REFERENCE PORTRAIT // 8K LOCK</text>
+  </svg>`.trim();
+  const fallbackUrl = `data:image/svg+xml;utf8,${encodeURIComponent(fallbackSvg)}`;
   res.json({
     success: true,
     imageUrl: fallbackUrl,
@@ -831,6 +846,100 @@ app.post('/api/tts/batch', async (req: Request, res: Response) => {
     totalScenes: results.length,
     totalAudioDuration: parseFloat(results.reduce((acc, r) => acc + r.audioDuration, 0).toFixed(2)),
     scenes: results,
+  });
+});
+
+// API: Generate custom background asset
+app.post('/api/generate-background', async (req: Request, res: Response) => {
+  const { prompt, visualStyle = 'Cinematic', location = 'Studio Environment', timeOfDay = 'Night', seed = Date.now() } = req.body;
+
+  if (!prompt || typeof prompt !== 'string') {
+    res.status(400).json({ error: 'Prompt is required.' });
+    return;
+  }
+
+  const styleLower = visualStyle.toLowerCase();
+  const isCyber = styleLower.includes('cyber') || prompt.toLowerCase().includes('neon');
+  const isSciFi = styleLower.includes('sci-fi') || prompt.toLowerCase().includes('space') || prompt.toLowerCase().includes('orbit');
+  const isAnime = styleLower.includes('anime');
+  const isSynth = styleLower.includes('synth') || styleLower.includes('80s');
+
+  const topColor = isCyber ? '#05030e' : isSciFi ? '#02050f' : isAnime ? '#172554' : isSynth ? '#140026' : '#04070d';
+  const midColor = isCyber ? '#1b0933' : isSciFi ? '#0a1d37' : isAnime ? '#7c2d12' : isSynth ? '#580058' : '#0e1e2d';
+  const accentColor = isCyber ? '#00f0ff' : isSciFi ? '#38bdf8' : isAnime ? '#f97316' : isSynth ? '#ff007f' : '#ffaa00';
+  const secondaryAccent = isCyber ? '#ff007f' : isSciFi ? '#60a5fa' : isAnime ? '#fde047' : isSynth ? '#00f0ff' : '#38bdf8';
+
+  const titleClean = location.replace(/[<>&"']/g, '').slice(0, 40);
+  const promptClean = prompt.replace(/[<>&"']/g, '').slice(0, 70);
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+    <defs>
+      <linearGradient id="dyn-sky" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="${topColor}"/>
+        <stop offset="65%" stop-color="${midColor}"/>
+        <stop offset="100%" stop-color="#020307"/>
+      </linearGradient>
+      <radialGradient id="dyn-sun" cx="68%" cy="38%" r="45%">
+        <stop offset="0%" stop-color="${accentColor}" stop-opacity="0.85"/>
+        <stop offset="45%" stop-color="${secondaryAccent}" stop-opacity="0.3"/>
+        <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <rect width="1280" height="720" fill="url(#dyn-sky)"/>
+    <circle cx="870" cy="270" r="280" fill="url(#dyn-sun)"/>
+    <circle cx="870" cy="270" r="190" fill="none" stroke="${accentColor}" stroke-opacity="0.25" stroke-dasharray="12,8"/>
+    <path d="M 0 540 L 140 460 L 220 460 L 320 520 L 480 430 L 600 430 L 720 530 L 890 410 L 1020 410 L 1140 500 L 1280 440 L 1280 720 L 0 720 Z" fill="#080c16" opacity="0.9"/>
+    <path d="M -40 560 L 80 410 L 180 410 L 250 560 L 390 350 L 510 350 L 600 560 L 760 300 L 880 300 L 980 560 L 1120 380 L 1240 380 L 1320 560 L 1320 720 L -40 720 Z" fill="#0c111e"/>
+    <line x1="450" y1="350" x2="450" y2="220" stroke="${accentColor}" stroke-width="2.5"/>
+    <circle cx="450" cy="220" r="4.5" fill="${accentColor}"/>
+    <line x1="820" y1="300" x2="820" y2="180" stroke="${secondaryAccent}" stroke-width="3"/>
+    <circle cx="820" cy="180" r="5.5" fill="${secondaryAccent}"/>
+    <rect x="0" y="550" width="1280" height="170" fill="#05070c"/>
+    <line x1="0" y1="550" x2="1280" y2="550" stroke="${accentColor}" stroke-width="1.8" opacity="0.6"/>
+    <ellipse cx="640" cy="620" rx="480" ry="40" fill="${accentColor}" opacity="0.12"/>
+    <rect x="24" y="650" width="480" height="42" rx="6" fill="#04060c" stroke="${accentColor}" stroke-opacity="0.35"/>
+    <text x="38" y="668" font-family="monospace" font-size="11" fill="${accentColor}" font-weight="bold">AI GENERATED BACKGROUND // ${titleClean.toUpperCase()}</text>
+    <text x="38" y="682" font-family="monospace" font-size="10" fill="#94a3b8">${promptClean} (${visualStyle} - ${timeOfDay})</text>
+  </svg>`.trim();
+
+  const dataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+
+  res.json({
+    success: true,
+    dataUrl,
+    asset: {
+      id: `bg-gen-${seed}`,
+      name: location ? `${location} Backdrop` : `Custom ${visualStyle} Background`,
+      category: isCyber ? 'Cyberpunk' : isSciFi ? 'Sci-Fi' : isAnime ? 'Anime' : 'Cinematic',
+      description: prompt,
+      imageUrl: dataUrl,
+      prompt,
+      colorPalette: [accentColor, secondaryAccent, topColor, midColor],
+    },
+  });
+});
+
+// API: Generate character portrait (TurnaroundModal)
+app.post('/api/characters/generate-portrait', async (req: Request, res: Response) => {
+  const { characterName = 'Character', prompt = '' } = req.body;
+  const colors = ['#00f0ff', '#ff007f', '#ffaa00', '#22c55e', '#a855f7'];
+  const accent = colors[Math.abs(characterName.length) % colors.length];
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+    <rect width="400" height="400" fill="#070a14"/>
+    <circle cx="200" cy="160" r="140" fill="${accent}" opacity="0.2"/>
+    <circle cx="200" cy="160" r="100" fill="#0b1020" stroke="${accent}" stroke-width="2"/>
+    <circle cx="200" cy="140" r="50" fill="#1e293b"/>
+    <path d="M 120 300 Q 200 230 280 300 L 280 400 L 120 400 Z" fill="#0f172a" stroke="${accent}" stroke-width="2"/>
+    <text x="200" y="340" font-family="monospace" font-size="12" fill="${accent}" text-anchor="middle" font-weight="bold">${characterName.toUpperCase()} // 8K LOCK</text>
+  </svg>`.trim();
+
+  const dataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+  res.json({
+    success: true,
+    imageUrl: dataUrl,
+    characterName,
+    prompt,
   });
 });
 

@@ -13,6 +13,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { CharacterProfile } from '../types';
+import { ELENA_PORTRAIT } from '../data/characterAssets';
 
 interface TurnaroundModalProps {
   character: CharacterProfile | null;
@@ -197,8 +198,9 @@ export const TurnaroundModal: React.FC<TurnaroundModalProps> = ({
           <div className="bg-[#0b0e18] border border-amber-500/30 rounded-xl p-4 flex flex-col md:flex-row items-center gap-4 shadow-[0_0_25px_rgba(251,191,36,0.08)]">
             <div className="relative w-44 h-32 md:w-56 md:h-36 rounded-lg overflow-hidden border border-amber-500/40 shrink-0 bg-black/60 shadow-lg group">
               <img
-                src={character.imageUrl || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=400&q=80'}
+                src={character.imageUrl || ELENA_PORTRAIT}
                 alt={character.name}
+                referrerPolicy="no-referrer"
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
               />
               <div className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded bg-black/80 border border-amber-400/50 text-[9px] font-mono text-amber-300 font-bold flex items-center gap-1 backdrop-blur-sm">

@@ -21,6 +21,7 @@ import {
   signInWithGoogle,
   signOutGoogle,
   getCachedAccessToken,
+  GOOGLE_FORMS_SCOPES,
   auth,
 } from '../services/firebaseAuth';
 import {
@@ -107,7 +108,7 @@ export const GoogleFormsModal: React.FC<GoogleFormsModalProps> = ({
     setIsLoading(true);
     setErrorMsg(null);
     try {
-      const { user, accessToken: token } = await signInWithGoogle();
+      const { user, accessToken: token } = await signInWithGoogle(GOOGLE_FORMS_SCOPES);
       setCurrentUser(user);
       setAccessToken(token);
       setSuccessMsg(`Connected as ${user.displayName || user.email}`);

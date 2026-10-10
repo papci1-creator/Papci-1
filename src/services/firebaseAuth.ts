@@ -26,53 +26,36 @@ export const db = getFirestore(app, (firebaseConfig as any).firestoreDatabaseId)
   }
 })();
 
-export const GOOGLE_WORKSPACE_SCOPES = [
-  // Drive & Forms
-  'https://www.googleapis.com/auth/drive',
-  'https://www.googleapis.com/auth/drive.file',
-  'https://www.googleapis.com/auth/drive.readonly',
-  'https://www.googleapis.com/auth/forms.body',
-  'https://www.googleapis.com/auth/forms.body.readonly',
-  'https://www.googleapis.com/auth/forms.responses.readonly',
-  // Gmail
-  'https://mail.google.com/',
-  'https://www.googleapis.com/auth/gmail.addons.current.action.compose',
-  'https://www.googleapis.com/auth/gmail.addons.current.message.action',
-  'https://www.googleapis.com/auth/gmail.addons.current.message.metadata',
-  'https://www.googleapis.com/auth/gmail.addons.current.message.readonly',
-  'https://www.googleapis.com/auth/gmail.compose',
-  'https://www.googleapis.com/auth/gmail.insert',
-  'https://www.googleapis.com/auth/gmail.labels',
-  'https://www.googleapis.com/auth/gmail.metadata',
-  'https://www.googleapis.com/auth/gmail.modify',
-  'https://www.googleapis.com/auth/gmail.readonly',
-  'https://www.googleapis.com/auth/gmail.send',
-  'https://www.googleapis.com/auth/gmail.settings.basic',
-  'https://www.googleapis.com/auth/gmail.settings.sharing',
-  // Google Calendar
-  'https://www.googleapis.com/auth/calendar',
-  'https://www.googleapis.com/auth/calendar.acls',
-  'https://www.googleapis.com/auth/calendar.acls.readonly',
-  'https://www.googleapis.com/auth/calendar.app.created',
-  'https://www.googleapis.com/auth/calendar.calendarlist',
-  'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
-  'https://www.googleapis.com/auth/calendar.calendars',
-  'https://www.googleapis.com/auth/calendar.calendars.readonly',
-  'https://www.googleapis.com/auth/calendar.events',
-  'https://www.googleapis.com/auth/calendar.events.freebusy',
-  'https://www.googleapis.com/auth/calendar.events.owned',
-  'https://www.googleapis.com/auth/calendar.events.owned.readonly',
-  'https://www.googleapis.com/auth/calendar.events.public.readonly',
-  'https://www.googleapis.com/auth/calendar.events.readonly',
-  'https://www.googleapis.com/auth/calendar.freebusy',
-  'https://www.googleapis.com/auth/calendar.readonly',
-  'https://www.googleapis.com/auth/calendar.settings.readonly',
+// Core Google Sign-In OAuth 2.0 Scopes (https://developers.google.com/identity/protocols/oauth2/scopes#google-sign-in)
+export const GOOGLE_SIGN_IN_SCOPES = [
+  'openid',
+  'https://www.googleapis.com/auth/userinfo.email',
+  'https://www.googleapis.com/auth/userinfo.profile',
 ];
 
-export const GOOGLE_FORMS_SCOPES = GOOGLE_WORKSPACE_SCOPES;
+// Feature-Specific Google Workspace Scopes (requested incrementally)
+export const GMAIL_SCOPES = [
+  'https://www.googleapis.com/auth/gmail.send',
+  'https://www.googleapis.com/auth/gmail.compose',
+  'https://www.googleapis.com/auth/gmail.readonly',
+];
+
+export const GOOGLE_FORMS_SCOPES = [
+  'https://www.googleapis.com/auth/forms.body',
+  'https://www.googleapis.com/auth/forms.responses.readonly',
+  'https://www.googleapis.com/auth/drive.file',
+  'https://www.googleapis.com/auth/drive.readonly',
+];
+
+export const GOOGLE_WORKSPACE_SCOPES = [
+  ...GOOGLE_SIGN_IN_SCOPES,
+  ...GMAIL_SCOPES,
+  ...GOOGLE_FORMS_SCOPES,
+];
 
 // In-Memory Token Cache (never stored in localStorage or sessionStorage per security guidelines)
 let inMemoryAccessToken: string | null = null;
+let isSigningIn = false;
 
 // Track auth state and clear cached token when signed out
 onAuthStateChanged(auth, (user) => {
@@ -82,23 +65,64 @@ onAuthStateChanged(auth, (user) => {
 });
 
 /**
- * Initiates Google OAuth Sign-in with the configured Google Workspace scopes.
+ * Initialize auth state listener. Call this on app load.
  */
-export async function signInWithGoogle(): Promise<{ user: User; accessToken: string }> {
+export function initAuth(
+  onAuthSuccess?: (user: User, token: string | null) => void,
+  onAuthFailure?: () => void
+) {
+  return onAuthStateChanged(auth, async (user: User | null) => {
+    if (user) {
+      if (onAuthSuccess) {
+        onAuthSuccess(user, inMemoryAccessToken);
+      }
+    } else {
+      inMemoryAccessToken = null;
+      if (onAuthFailure) {
+        onAuthFailure();
+      }
+    }
+  });
+}
+
+/**
+ * Initiates Google OAuth Sign-in with the configured Google Sign-in and optional feature scopes.
+ */
+export async function signInWithGoogle(
+  additionalScopes: string[] = []
+): Promise<{ user: User; accessToken: string }> {
   const provider = new GoogleAuthProvider();
-  GOOGLE_WORKSPACE_SCOPES.forEach((scope) => provider.addScope(scope));
+
+  // Always request official Google Sign-In scopes (openid, email, profile)
+  GOOGLE_SIGN_IN_SCOPES.forEach((scope) => provider.addScope(scope));
+
+  // Add any additional scopes for specific features (e.g. Gmail, Forms)
+  additionalScopes.forEach((scope) => {
+    if (!GOOGLE_SIGN_IN_SCOPES.includes(scope)) {
+      provider.addScope(scope);
+    }
+  });
+
   provider.setCustomParameters({ prompt: 'consent' });
 
-  const result = await signInWithPopup(auth, provider);
-  const credential = GoogleAuthProvider.credentialFromResult(result);
-  const token = credential?.accessToken || null;
+  isSigningIn = true;
+  try {
+    const result = await signInWithPopup(auth, provider);
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    const token = credential?.accessToken || null;
 
-  if (!token) {
-    throw new Error('Failed to obtain Google OAuth access token from authentication.');
+    if (!token) {
+      // Fallback to Firebase user ID token if accessToken not in result
+      const idToken = await result.user.getIdToken();
+      inMemoryAccessToken = idToken;
+      return { user: result.user, accessToken: idToken };
+    }
+
+    inMemoryAccessToken = token;
+    return { user: result.user, accessToken: token };
+  } finally {
+    isSigningIn = false;
   }
-
-  inMemoryAccessToken = token;
-  return { user: result.user, accessToken: token };
 }
 
 /**

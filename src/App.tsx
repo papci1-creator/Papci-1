@@ -16,9 +16,15 @@ import { BatchAudioModal } from './components/BatchAudioModal';
 import { TransitionModal } from './components/TransitionModal';
 import { CostumeLockModal } from './components/CostumeLockModal';
 import { GmailModal } from './components/GmailModal';
+import { BackgroundGeneratorModal } from './components/BackgroundGeneratorModal';
+import { VoiceRecorderModal } from './components/VoiceRecorderModal';
 import { InstallPromptBanner } from './components/InstallPromptBanner';
+import { User } from 'firebase/auth';
+import { initAuth, signInWithGoogle, signOutGoogle } from './services/firebaseAuth';
 import { Scene, AspectRatio, PresetStory, CharacterProfile, TransitionEffect } from './types';
 import { PRESET_STORIES, VISUAL_STYLES, VIDEO_GENERATORS, VOICE_ACTORS, MUSIC_STYLES, SAMPLE_VIDEO_CLIPS, DEFAULT_CHARACTERS } from './data/presets';
+import { LEO_PORTRAIT, MALAKOR_PORTRAIT } from './data/characterAssets';
+import { BG_CYBERPUNK_METROPOLIS, BG_QUANTUM_VAULT } from './data/backgroundAssets';
 import { audioEngine } from './utils/audioEngine';
 import { parseStoryNLP, compileUnifiedVideoPrompt } from './utils/nlpParser';
 
@@ -34,6 +40,10 @@ export default function App() {
   const [musicVolume, setMusicVolume] = useState(0.35);
   const [defaultCameraMovement, setDefaultCameraMovement] = useState('Dynamic AI');
 
+  // Google Sign-In & Authentication State
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(false);
+
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('16:9');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -46,6 +56,9 @@ export default function App() {
   const [isTransitionsOpen, setIsTransitionsOpen] = useState(false);
   const [isCostumeLockOpen, setIsCostumeLockOpen] = useState(false);
   const [isGmailOpen, setIsGmailOpen] = useState(false);
+  const [isBackgroundGeneratorOpen, setIsBackgroundGeneratorOpen] = useState(false);
+  const [isVoiceRecorderOpen, setIsVoiceRecorderOpen] = useState(false);
+  const [voiceRecorderTargetSceneId, setVoiceRecorderTargetSceneId] = useState<string | undefined>(undefined);
   const [useLiveVideoPreview, setUseLiveVideoPreview] = useState(true);
 
   // Characters & Reference Manager State
@@ -76,10 +89,12 @@ export default function App() {
       characterId: 'char-leo',
       characterName: 'Leo',
       characterRole: 'Protagonist',
-      characterAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
+      characterAvatar: LEO_PORTRAIT,
       characterAccent: '#00f0ff',
       sceneLocation: 'Neo-Tokyo Sublevel 4',
       timeOfDay: 'Night',
+      backgroundImage: BG_CYBERPUNK_METROPOLIS,
+      backgroundPrompt: 'Neo-Tokyo Cyberpunk Metropolis with neon rain and reflections',
       outfitId: 'outfit-leo-1',
       outfitName: 'Astronaut Spacesuit',
       outfitDescription: 'Matte white pressurized EVA spacesuit with cobalt-blue accents, gold-tinted reflective visor, and cyan life-support conduits.',
@@ -114,10 +129,12 @@ export default function App() {
       characterId: 'char-leo',
       characterName: 'Leo',
       characterRole: 'Protagonist',
-      characterAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
+      characterAvatar: LEO_PORTRAIT,
       characterAccent: '#00f0ff',
       sceneLocation: 'High-Tech Archive Vault',
       timeOfDay: 'Midnight',
+      backgroundImage: BG_QUANTUM_VAULT,
+      backgroundPrompt: 'Quantum Core Data Vault with floating plasma core',
       outfitId: 'outfit-leo-1',
       outfitName: 'Astronaut Spacesuit',
       outfitDescription: 'Matte white pressurized EVA spacesuit with cobalt-blue accents, gold-tinted reflective visor, and cyan life-support conduits.',
@@ -152,10 +169,12 @@ export default function App() {
       characterId: 'char-malakor',
       characterName: 'Malakor',
       characterRole: 'Antagonist',
-      characterAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80',
+      characterAvatar: MALAKOR_PORTRAIT,
       characterAccent: '#ffaa00',
       sceneLocation: 'Megastructure Catwalks',
       timeOfDay: 'Dusk',
+      backgroundImage: BG_CYBERPUNK_METROPOLIS,
+      backgroundPrompt: 'Megastructure Catwalks overlooking cyber city',
       outfitId: 'outfit-malakor-1',
       outfitName: 'Obsidian High-Collar Trench',
       outfitDescription: 'Heavy armored obsidian trench coat with amber illuminated silk lining, gilded shoulder epaulets, and titanium double-breasted clasps.',
@@ -532,6 +551,51 @@ export default function App() {
     setScenes(recalibrateTimestamps(reorderedScenes));
   };
 
+  // Voice Recording Handlers
+  const handleSaveVoiceRecording = (
+    sceneId: string,
+    audioUrl: string,
+    audioDuration: number,
+    transcriptionText?: string,
+    syncSceneDuration?: boolean
+  ) => {
+    setScenes((prev) => {
+      const updated = prev.map((s) => {
+        if (s.id === sceneId) {
+          const newDuration = syncSceneDuration
+            ? Math.max(3, Math.ceil(audioDuration + 0.5))
+            : s.duration;
+          return {
+            ...s,
+            audioUrl,
+            audioDuration,
+            isAudioGenerated: true,
+            audioFormat: 'webm' as const,
+            voiceoverText: transcriptionText?.trim() || s.voiceoverText,
+            duration: newDuration,
+          };
+        }
+        return s;
+      });
+      return recalibrateTimestamps(updated);
+    });
+  };
+
+  const handleClearVoiceRecording = (sceneId: string) => {
+    setScenes((prev) =>
+      prev.map((s) =>
+        s.id === sceneId
+          ? {
+              ...s,
+              audioUrl: undefined,
+              audioDuration: undefined,
+              isAudioGenerated: false,
+            }
+          : s
+      )
+    );
+  };
+
   // Add Manual Blank Scene
   const handleAddScene = () => {
     const newIdx = scenes.length + 1;
@@ -624,6 +688,40 @@ export default function App() {
     }
   };
 
+  // Google Sign-In Auth State Listener
+  useEffect(() => {
+    const unsubscribe = initAuth(
+      (user) => {
+        setCurrentUser(user);
+      },
+      () => {
+        setCurrentUser(null);
+      }
+    );
+    return () => unsubscribe();
+  }, []);
+
+  const handleGoogleSignIn = async () => {
+    setIsAuthLoading(true);
+    try {
+      const { user } = await signInWithGoogle();
+      setCurrentUser(user);
+    } catch (err: any) {
+      console.warn('Google sign-in cancelled or failed:', err);
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
+
+  const handleGoogleSignOut = async () => {
+    try {
+      await signOutGoogle();
+      setCurrentUser(null);
+    } catch (err) {
+      console.error('Sign-out error:', err);
+    }
+  };
+
   return (
     <div className="h-screen w-screen flex flex-col bg-[#08090e] text-zinc-100 font-sans overflow-hidden select-none">
       {/* PWA & Mobile Android Install Banner */}
@@ -642,6 +740,15 @@ export default function App() {
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenGoogleForms={() => setIsGoogleFormsOpen(true)}
         onOpenGmail={() => setIsGmailOpen(true)}
+        onOpenBackgroundGenerator={() => setIsBackgroundGeneratorOpen(true)}
+        onOpenVoiceRecorder={() => {
+          setVoiceRecorderTargetSceneId(scenes[currentSceneIndex]?.id);
+          setIsVoiceRecorderOpen(true);
+        }}
+        currentUser={currentUser}
+        onSignInGoogle={handleGoogleSignIn}
+        onSignOutGoogle={handleGoogleSignOut}
+        isAuthLoading={isAuthLoading}
       />
 
       {/* 2. Workspace Split: Two-Column Layout */}
@@ -732,6 +839,23 @@ export default function App() {
               onOpenBatchAudio={() => setIsBatchAudioOpen(true)}
               onOpenTransitions={() => setIsTransitionsOpen(true)}
               onOpenCostumeLock={() => setIsCostumeLockOpen(true)}
+              onOpenBackgroundGenerator={(sceneId) => {
+                if (sceneId) {
+                  const idx = scenes.findIndex((s) => s.id === sceneId);
+                  if (idx !== -1) setCurrentSceneIndex(idx);
+                }
+                setIsBackgroundGeneratorOpen(true);
+              }}
+              onOpenVoiceRecorder={(sceneId) => {
+                if (sceneId) {
+                  const idx = scenes.findIndex((s) => s.id === sceneId);
+                  if (idx !== -1) setCurrentSceneIndex(idx);
+                  setVoiceRecorderTargetSceneId(sceneId);
+                } else {
+                  setVoiceRecorderTargetSceneId(scenes[currentSceneIndex]?.id);
+                }
+                setIsVoiceRecorderOpen(true);
+              }}
             />
           </div>
         </div>
@@ -744,6 +868,7 @@ export default function App() {
         scenes={scenes}
         aspectRatio={aspectRatio}
         musicStyle={musicStyle}
+        projectTitle={projectTitle}
         onOpenGmail={() => setIsGmailOpen(true)}
       />
 
@@ -848,6 +973,26 @@ export default function App() {
         projectTitle={projectTitle}
         scenes={scenes}
         characters={characters}
+      />
+
+      {/* 11. AI Scene Background Asset Studio Modal */}
+      <BackgroundGeneratorModal
+        isOpen={isBackgroundGeneratorOpen}
+        onClose={() => setIsBackgroundGeneratorOpen(false)}
+        scenes={scenes}
+        currentSceneIndex={currentSceneIndex}
+        onUpdateScene={handleUpdateScene}
+        onBulkUpdateScenes={handleBulkUpdateScenes}
+      />
+
+      {/* 12. Voice Recorder Studio Modal */}
+      <VoiceRecorderModal
+        isOpen={isVoiceRecorderOpen}
+        onClose={() => setIsVoiceRecorderOpen(false)}
+        scenes={scenes}
+        initialSceneId={voiceRecorderTargetSceneId}
+        onSaveRecording={handleSaveVoiceRecording}
+        onClearRecording={handleClearVoiceRecording}
       />
     </div>
   );

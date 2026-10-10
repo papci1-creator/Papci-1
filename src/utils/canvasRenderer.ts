@@ -25,6 +25,21 @@ interface Particle {
 
 const particlePool: Map<string, Particle[]> = new Map();
 
+// High-performance image cache for custom background assets rendering
+const imageElementCache: Map<string, HTMLImageElement> = new Map();
+
+export function getCachedImage(url?: string): HTMLImageElement | null {
+  if (!url) return null;
+  let img = imageElementCache.get(url);
+  if (!img) {
+    img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = url;
+    imageElementCache.set(url, img);
+  }
+  return img.complete && img.naturalWidth > 0 ? img : null;
+}
+
 function getSceneParticles(sceneId: string, type: string, width: number, height: number): Particle[] {
   if (particlePool.has(sceneId)) {
     return particlePool.get(sceneId)!;
@@ -141,8 +156,34 @@ export function renderCinematicFrame(
     }
   }
 
-  // 1. SKY & BACKGROUND ATMOSPHERE (if not rendering live video stream)
-  if (!hasDrawnLiveVideo) {
+  // 1. CUSTOM BACKGROUND ASSET OR LIVE VIDEO STREAM
+  let hasDrawnCustomBackground = false;
+  if (scene.backgroundImage && !hasDrawnLiveVideo) {
+    const bgImg = getCachedImage(scene.backgroundImage);
+    if (bgImg && bgImg.complete && bgImg.naturalWidth > 0) {
+      try {
+        // Draw custom background with cinematic camera dolly, zoom, and parallax bounds
+        const extraW = width * 0.12;
+        const extraH = height * 0.12;
+        ctx.drawImage(
+          bgImg,
+          -extraW / 2 + panX * 0.35,
+          -extraH / 2 + panY * 0.35,
+          width + extraW,
+          height + extraH
+        );
+        // Subtle cinematic color grading tint over the custom background asset
+        ctx.fillStyle = 'rgba(5, 7, 15, 0.08)';
+        ctx.fillRect(-40, -40, width + 80, height + 80);
+        hasDrawnCustomBackground = true;
+      } catch {
+        hasDrawnCustomBackground = false;
+      }
+    }
+  }
+
+  // 1b. PROCEDURAL SKY & ATMOSPHERE (if not rendering live video or custom background asset)
+  if (!hasDrawnLiveVideo && !hasDrawnCustomBackground) {
     const bgGrad = ctx.createLinearGradient(0, 0, 0, height);
     if (style.includes('cyberpunk')) {
       bgGrad.addColorStop(0, '#050510');
@@ -172,120 +213,121 @@ export function renderCinematicFrame(
     ctx.fillRect(-60, -60, width + 120, height + 120);
   }
 
-  // 2. CELESTIAL OR NEON GLOW (Sun, Moon, or Cyber Neon Sun)
+  // 2. CELESTIAL OR NEON GLOW (Sun, Moon, or Cyber Neon Sun) - if procedural
   const sunX = isEven ? width * 0.75 : width * 0.25;
   const sunY = height * 0.38;
   const sunRad = width * 0.18;
 
-  const sunGlow = ctx.createRadialGradient(sunX, sunY, 10, sunX, sunY, sunRad);
-  if (style.includes('cyberpunk') || style.includes('synthwave')) {
-    sunGlow.addColorStop(0, 'rgba(255, 0, 128, 0.85)');
-    sunGlow.addColorStop(0.5, 'rgba(0, 240, 255, 0.4)');
-    sunGlow.addColorStop(1, 'rgba(0,0,0,0)');
-  } else if (style.includes('anime')) {
-    sunGlow.addColorStop(0, 'rgba(255, 235, 170, 0.9)');
-    sunGlow.addColorStop(0.4, 'rgba(255, 140, 80, 0.5)');
-    sunGlow.addColorStop(1, 'rgba(0,0,0,0)');
-  } else {
-    sunGlow.addColorStop(0, 'rgba(255, 200, 100, 0.7)');
-    sunGlow.addColorStop(0.4, 'rgba(0, 200, 255, 0.25)');
-    sunGlow.addColorStop(1, 'rgba(0,0,0,0)');
-  }
-  ctx.fillStyle = sunGlow;
-  ctx.beginPath();
-  ctx.arc(sunX, sunY, sunRad, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Synthwave horizontal sun blinds if applicable
-  if (style.includes('synthwave')) {
-    ctx.fillStyle = '#0a001a';
-    for (let b = 0; b < 6; b++) {
-      const by = sunY + b * 12 + 6;
-      ctx.fillRect(sunX - sunRad, by, sunRad * 2, 4 + b * 1.5);
+  if (!hasDrawnLiveVideo && !hasDrawnCustomBackground) {
+    const sunGlow = ctx.createRadialGradient(sunX, sunY, 10, sunX, sunY, sunRad);
+    if (style.includes('cyberpunk') || style.includes('synthwave')) {
+      sunGlow.addColorStop(0, 'rgba(255, 0, 128, 0.85)');
+      sunGlow.addColorStop(0.5, 'rgba(0, 240, 255, 0.4)');
+      sunGlow.addColorStop(1, 'rgba(0,0,0,0)');
+    } else if (style.includes('anime')) {
+      sunGlow.addColorStop(0, 'rgba(255, 235, 170, 0.9)');
+      sunGlow.addColorStop(0.4, 'rgba(255, 140, 80, 0.5)');
+      sunGlow.addColorStop(1, 'rgba(0,0,0,0)');
+    } else {
+      sunGlow.addColorStop(0, 'rgba(255, 200, 100, 0.7)');
+      sunGlow.addColorStop(0.4, 'rgba(0, 200, 255, 0.25)');
+      sunGlow.addColorStop(1, 'rgba(0,0,0,0)');
     }
-  }
+    ctx.fillStyle = sunGlow;
+    ctx.beginPath();
+    ctx.arc(sunX, sunY, sunRad, 0, Math.PI * 2);
+    ctx.fill();
 
-  // 3. DISTANT SILHOUETTES / SKYLINE (Layer 1 Parallax)
-  const p1Offset = panX * 0.3;
-  ctx.fillStyle = style.includes('cyberpunk') ? '#080816' : '#050a12';
-  ctx.beginPath();
-  ctx.moveTo(-100, height);
-  const step = width / 12;
-  for (let i = 0; i <= 14; i++) {
-    const sx = (i - 1) * step + p1Offset;
-    // Pseudorandom procedural silhouette heights based on scene seed
-    const pseudoH = Math.sin(i * 1.7 + (scene.sceneNumber * 3)) * 0.5 + 0.5;
-    const sy = height * 0.48 + (1 - pseudoH) * (height * 0.2);
-    ctx.lineTo(sx, sy);
-    ctx.lineTo(sx + step * 0.85, sy);
-  }
-  ctx.lineTo(width + 100, height);
-  ctx.closePath();
-  ctx.fill();
+    // Synthwave horizontal sun blinds if applicable
+    if (style.includes('synthwave')) {
+      ctx.fillStyle = '#0a001a';
+      for (let b = 0; b < 6; b++) {
+        const by = sunY + b * 12 + 6;
+        ctx.fillRect(sunX - sunRad, by, sunRad * 2, 4 + b * 1.5);
+      }
+    }
 
-  // Neon Windows / Cyber Spires in distant layer
-  if (style.includes('cyberpunk') || style.includes('synthwave')) {
-    ctx.fillStyle = theme.accentColor || '#ffaa00';
-    for (let i = 1; i < 12; i += 2) {
-      const bx = i * step + p1Offset + 10;
-      const by = height * 0.55;
-      for (let r = 0; r < 4; r++) {
-        if ((i + r) % 2 === 0) {
-          ctx.fillRect(bx, by + r * 14, 5, 7);
+    // 3. DISTANT SILHOUETTES / SKYLINE (Layer 1 Parallax)
+    const p1Offset = panX * 0.3;
+    ctx.fillStyle = style.includes('cyberpunk') ? '#080816' : '#050a12';
+    ctx.beginPath();
+    ctx.moveTo(-100, height);
+    const step = width / 12;
+    for (let i = 0; i <= 14; i++) {
+      const sx = (i - 1) * step + p1Offset;
+      const pseudoH = Math.sin(i * 1.7 + (scene.sceneNumber * 3)) * 0.5 + 0.5;
+      const sy = height * 0.48 + (1 - pseudoH) * (height * 0.2);
+      ctx.lineTo(sx, sy);
+      ctx.lineTo(sx + step * 0.85, sy);
+    }
+    ctx.lineTo(width + 100, height);
+    ctx.closePath();
+    ctx.fill();
+
+    // Neon Windows / Cyber Spires in distant layer
+    if (style.includes('cyberpunk') || style.includes('synthwave')) {
+      ctx.fillStyle = theme.accentColor || '#ffaa00';
+      for (let i = 1; i < 12; i += 2) {
+        const bx = i * step + p1Offset + 10;
+        const by = height * 0.55;
+        for (let r = 0; r < 4; r++) {
+          if ((i + r) % 2 === 0) {
+            ctx.fillRect(bx, by + r * 14, 5, 7);
+          }
         }
       }
     }
-  }
 
-  // 4. MIDGROUND FOCUS STRUCTURE & ENVIRONMENT (Layer 2 Parallax)
-  const p2Offset = panX * 0.6;
-  ctx.fillStyle = style.includes('cyberpunk') ? '#0c0e1a' : '#0a1017';
-  ctx.beginPath();
-  ctx.moveTo(-80, height);
-  for (let j = 0; j <= 8; j++) {
-    const mx = (j - 0.5) * (width / 6) + p2Offset;
-    const mHeight = (Math.cos(j * 2.3 + scene.sceneNumber) * 0.5 + 0.5) * (height * 0.35);
-    const my = height * 0.62 - mHeight;
-    ctx.lineTo(mx, my);
-    ctx.lineTo(mx + 70, my);
-  }
-  ctx.lineTo(width + 80, height);
-  ctx.closePath();
-  ctx.fill();
+    // 4. MIDGROUND FOCUS STRUCTURE & ENVIRONMENT (Layer 2 Parallax)
+    const p2Offset = panX * 0.6;
+    ctx.fillStyle = style.includes('cyberpunk') ? '#0c0e1a' : '#0a1017';
+    ctx.beginPath();
+    ctx.moveTo(-80, height);
+    for (let j = 0; j <= 8; j++) {
+      const mx = (j - 0.5) * (width / 6) + p2Offset;
+      const mHeight = (Math.cos(j * 2.3 + scene.sceneNumber) * 0.5 + 0.5) * (height * 0.35);
+      const my = height * 0.62 - mHeight;
+      ctx.lineTo(mx, my);
+      ctx.lineTo(mx + 70, my);
+    }
+    ctx.lineTo(width + 80, height);
+    ctx.closePath();
+    ctx.fill();
 
-  // Cyan Neon Outlines & Highlights on Midground Buildings
-  ctx.strokeStyle = theme.primaryColor || '#00f0ff';
-  ctx.lineWidth = 2.5;
-  ctx.shadowColor = theme.primaryColor || '#00f0ff';
-  ctx.shadowBlur = 12;
-  ctx.beginPath();
-  for (let j = 1; j <= 5; j += 2) {
-    const mx = j * (width / 5) + p2Offset;
-    ctx.moveTo(mx, height * 0.65);
-    ctx.lineTo(mx + 60, height * 0.65);
-    ctx.lineTo(mx + 60, height * 0.85);
-  }
-  ctx.stroke();
-  ctx.shadowBlur = 0; // reset shadow
+    // Cyan Neon Outlines & Highlights on Midground Buildings
+    ctx.strokeStyle = theme.primaryColor || '#00f0ff';
+    ctx.lineWidth = 2.5;
+    ctx.shadowColor = theme.primaryColor || '#00f0ff';
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    for (let j = 1; j <= 5; j += 2) {
+      const mx = j * (width / 5) + p2Offset;
+      ctx.moveTo(mx, height * 0.65);
+      ctx.lineTo(mx + 60, height * 0.65);
+      ctx.lineTo(mx + 60, height * 0.85);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0; // reset shadow
 
-  // 5. FOREGROUND GROUND / REFLECTIVE ROAD / SHADOWS
-  const groundGrad = ctx.createLinearGradient(0, height * 0.68, 0, height);
-  if (style.includes('cyberpunk')) {
-    groundGrad.addColorStop(0, '#0c071a');
-    groundGrad.addColorStop(0.4, '#130c24');
-    groundGrad.addColorStop(1, '#05020a');
-  } else {
-    groundGrad.addColorStop(0, '#070b10');
-    groundGrad.addColorStop(1, '#020406');
-  }
-  ctx.fillStyle = groundGrad;
-  ctx.fillRect(-100, height * 0.72, width + 200, height * 0.35);
+    // 5. FOREGROUND GROUND / REFLECTIVE ROAD / SHADOWS
+    const groundGrad = ctx.createLinearGradient(0, height * 0.68, 0, height);
+    if (style.includes('cyberpunk')) {
+      groundGrad.addColorStop(0, '#0c071a');
+      groundGrad.addColorStop(0.4, '#130c24');
+      groundGrad.addColorStop(1, '#05020a');
+    } else {
+      groundGrad.addColorStop(0, '#070b10');
+      groundGrad.addColorStop(1, '#020406');
+    }
+    ctx.fillStyle = groundGrad;
+    ctx.fillRect(-100, height * 0.72, width + 200, height * 0.35);
 
-  // Reflective wet pavement streaks
-  ctx.fillStyle = 'rgba(0, 240, 255, 0.12)';
-  for (let s = 0; s < 5; s++) {
-    const rx = width * 0.15 + s * (width * 0.18) + (progress * 15);
-    ctx.fillRect(rx, height * 0.78, 40, height * 0.22);
+    // Reflective wet pavement streaks
+    ctx.fillStyle = 'rgba(0, 240, 255, 0.12)';
+    for (let s = 0; s < 5; s++) {
+      const rx = width * 0.15 + s * (width * 0.18) + (progress * 15);
+      ctx.fillRect(rx, height * 0.78, 40, height * 0.22);
+    }
   }
 
   // 6. ATMOSPHERIC PARTICLES (Rain, Embers, Cosmic Dust)
