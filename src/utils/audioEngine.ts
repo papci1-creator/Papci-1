@@ -23,15 +23,32 @@ export interface DuckingConfig {
 
 type DuckingListener = (isDucking: boolean, currentGain: number, activeSegment: VoiceoverSegment | null) => void;
 
+type StepListener = (step: number, isPlaying: boolean) => void;
+
 class AudioEngine {
   private ctx: AudioContext | null = null;
   private musicGain: GainNode | null = null;
+  private sfxGain: GainNode | null = null;
   private masterGain: GainNode | null = null;
   private isPlayingMusic = false;
   private currentStyle = 'Cinematic Ambient';
+  private currentSfxStyle = 'Neon Rain & Thunder';
   private oscNodes: OscillatorNode[] = [];
+  private sfxNodes: AudioNode[] = [];
+  private rhythmTimer: number | null = null;
+  private currentStep: number = 0;
+  private customMusicAudio: HTMLAudioElement | null = null;
+  private customAudioUrl: string | null = null;
   private activeUtterance: SpeechSynthesisUtterance | null = null;
   private destinationNode: MediaStreamAudioDestinationNode | null = null;
+
+  // Afrobeat & Multi-Track Parameters
+  private afrobeatBpm: number = 108;
+  private percussionIntensity: number = 0.85;
+  private logDrumBassBoost: number = 0.80;
+  private nominalSfxVolume: number = 0.28;
+  private voiceoverMasterVolume: number = 1.0;
+  private stepListeners: Set<StepListener> = new Set();
 
   // Automated Audio Ducking Subsystem
   private duckingConfig: DuckingConfig = {
@@ -55,12 +72,16 @@ class AudioEngine {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       this.ctx = new AudioCtx();
       this.masterGain = this.ctx.createGain();
-      this.masterGain.gain.value = 0.8;
+      this.masterGain.gain.value = 0.85;
       this.masterGain.connect(this.ctx.destination);
 
       this.musicGain = this.ctx.createGain();
       this.musicGain.gain.value = this.nominalMusicVolume;
       this.musicGain.connect(this.masterGain);
+
+      this.sfxGain = this.ctx.createGain();
+      this.sfxGain.gain.value = this.nominalSfxVolume;
+      this.sfxGain.connect(this.masterGain);
 
       this.destinationNode = this.ctx.createMediaStreamDestination();
       this.masterGain.connect(this.destinationNode);
@@ -77,7 +98,7 @@ class AudioEngine {
 
   public setMasterVolume(val: number) {
     if (this.masterGain && this.ctx) {
-      this.masterGain.gain.setTargetAtTime(Math.max(0, Math.min(1, val)), this.ctx.currentTime, 0.05);
+      this.masterGain.gain.setTargetAtTime(Math.max(0, Math.min(1.2, val)), this.ctx.currentTime, 0.05);
     }
   }
 
@@ -86,10 +107,60 @@ class AudioEngine {
     if (!this.isDuckingActive && this.musicGain && this.ctx) {
       this.musicGain.gain.setTargetAtTime(this.nominalMusicVolume, this.ctx.currentTime, 0.05);
     }
+    if (this.customMusicAudio) {
+      this.customMusicAudio.volume = this.nominalMusicVolume;
+    }
   }
 
   public getMusicVolume(): number {
     return this.nominalMusicVolume;
+  }
+
+  public setSfxVolume(val: number) {
+    this.nominalSfxVolume = Math.max(0, Math.min(1, val));
+    if (this.sfxGain && this.ctx) {
+      this.sfxGain.gain.setTargetAtTime(this.nominalSfxVolume, this.ctx.currentTime, 0.05);
+    }
+  }
+
+  public getSfxVolume(): number {
+    return this.nominalSfxVolume;
+  }
+
+  public setVoiceoverMasterVolume(val: number) {
+    this.voiceoverMasterVolume = Math.max(0, Math.min(1.2, val));
+  }
+
+  public getVoiceoverMasterVolume(): number {
+    return this.voiceoverMasterVolume;
+  }
+
+  public setAfrobeatParams(params: { bpm?: number; percussionIntensity?: number; logDrumBassBoost?: number }) {
+    if (params.bpm !== undefined) this.afrobeatBpm = Math.max(80, Math.min(150, params.bpm));
+    if (params.percussionIntensity !== undefined) this.percussionIntensity = Math.max(0, Math.min(1, params.percussionIntensity));
+    if (params.logDrumBassBoost !== undefined) this.logDrumBassBoost = Math.max(0, Math.min(1, params.logDrumBassBoost));
+
+    // If currently playing Afrobeat, restart loop with updated BPM
+    if (this.isPlayingMusic && (this.currentStyle === 'Afrobeat Groove' || this.currentStyle === 'Afro-Cyberpunk Fusion')) {
+      this.startMusic(this.currentStyle);
+    }
+  }
+
+  public setCustomAudioUrl(url: string | null) {
+    this.customAudioUrl = url;
+  }
+
+  public onStepChange(listener: StepListener): () => void {
+    this.stepListeners.add(listener);
+    return () => this.stepListeners.delete(listener);
+  }
+
+  private notifyStep(step: number, isPlaying: boolean) {
+    this.stepListeners.forEach((l) => {
+      try {
+        l(step, isPlaying);
+      } catch (_) {}
+    });
   }
 
   // ==========================================
@@ -250,6 +321,202 @@ class AudioEngine {
   }
 
   // ==========================================
+  // Afrobeat & Poly-Rhythmic Drum / Groove Primitives
+  // ==========================================
+
+  private triggerLogDrum(freq: number, isCyber: boolean) {
+    if (!this.ctx || !this.musicGain) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = isCyber ? 'sawtooth' : 'sine';
+    // Classic Afrobeat / Amapiano log drum pitch knock envelope
+    osc.frequency.setValueAtTime(freq * 2.4, now);
+    osc.frequency.exponentialRampToValueAtTime(freq, now + 0.045);
+    osc.frequency.exponentialRampToValueAtTime(freq * 0.75, now + 0.28);
+
+    const boost = 0.35 + this.logDrumBassBoost * 0.45;
+    gain.gain.setValueAtTime(boost, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(isCyber ? 520 : 280, now);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.musicGain);
+
+    osc.start(now);
+    osc.stop(now + 0.34);
+  }
+
+  private triggerClaveRimshot(accent: boolean) {
+    if (!this.ctx || !this.musicGain) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    // West African woodblock / rimshot tone
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(accent ? 880 : 740, now);
+    osc.frequency.exponentialRampToValueAtTime(420, now + 0.035);
+
+    const level = (accent ? 0.28 : 0.18) * this.percussionIntensity;
+    gain.gain.setValueAtTime(Math.max(0.01, level), now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.055);
+
+    osc.connect(gain);
+    gain.connect(this.musicGain);
+
+    osc.start(now);
+    osc.stop(now + 0.06);
+  }
+
+  private triggerShaker(accent: boolean) {
+    if (!this.ctx || !this.musicGain) return;
+    const now = this.ctx.currentTime;
+    const bufferSize = Math.floor(this.ctx.sampleRate * 0.045);
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.35));
+    }
+
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(6500, now);
+    filter.Q.setValueAtTime(2.2, now);
+
+    const gain = this.ctx.createGain();
+    const level = (accent ? 0.22 : 0.10) * this.percussionIntensity;
+    gain.gain.setValueAtTime(Math.max(0.005, level), now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
+
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.musicGain);
+
+    noise.start(now);
+  }
+
+  private triggerMelodicPluck(freq: number, isCyber: boolean) {
+    if (!this.ctx || !this.musicGain) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    const filter = this.ctx.createBiquadFilter();
+
+    osc.type = isCyber ? 'sawtooth' : 'triangle';
+    osc.frequency.setValueAtTime(freq, now);
+
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(isCyber ? 1800 : 1100, now);
+    filter.frequency.exponentialRampToValueAtTime(320, now + 0.22);
+
+    gain.gain.setValueAtTime(0.20, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.musicGain);
+
+    osc.start(now);
+    osc.stop(now + 0.26);
+  }
+
+  // ==========================================
+  // Ambient SFX Layer Synthesizer
+  // ==========================================
+
+  public startAmbientSfx(sfxStyle: string) {
+    this.initContext();
+    if (!this.ctx || !this.sfxGain) return;
+
+    this.stopAmbientSfx();
+    this.currentSfxStyle = sfxStyle;
+    if (!sfxStyle || sfxStyle === 'None') return;
+
+    const now = this.ctx.currentTime;
+    try {
+      // Create 2-second looping pink/brown noise buffer for atmospheric texture
+      const bufLen = this.ctx.sampleRate * 2;
+      const noiseBuf = this.ctx.createBuffer(1, bufLen, this.ctx.sampleRate);
+      const output = noiseBuf.getChannelData(0);
+      let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+      for (let i = 0; i < bufLen; i++) {
+        const white = Math.random() * 2 - 1;
+        b0 = 0.99886 * b0 + white * 0.0555179;
+        b1 = 0.99332 * b1 + white * 0.0750759;
+        b2 = 0.96900 * b2 + white * 0.1538520;
+        b3 = 0.86650 * b3 + white * 0.3104856;
+        b4 = 0.55000 * b4 + white * 0.5329522;
+        b5 = -0.7616 * b5 - white * 0.0168980;
+        output[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.04;
+        b6 = white * 0.115926;
+      }
+
+      const noiseNode = this.ctx.createBufferSource();
+      noiseNode.buffer = noiseBuf;
+      noiseNode.loop = true;
+
+      const filter = this.ctx.createBiquadFilter();
+      if (sfxStyle === 'Neon Rain & Thunder') {
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(1100, now);
+        filter.Q.setValueAtTime(0.7, now);
+      } else if (sfxStyle === 'Lagos Night Pulse') {
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(2400, now);
+        filter.Q.setValueAtTime(1.8, now);
+      } else if (sfxStyle === 'Deep Space Telemetry') {
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(180, now);
+      } else if (sfxStyle === 'Desert Wind') {
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(520, now);
+        filter.Q.setValueAtTime(3.0, now);
+
+        const windLfo = this.ctx.createOscillator();
+        windLfo.frequency.setValueAtTime(0.2, now);
+        const windLfoGain = this.ctx.createGain();
+        windLfoGain.gain.setValueAtTime(280, now);
+        windLfo.connect(windLfoGain);
+        windLfoGain.connect(filter.frequency);
+        windLfo.start();
+        this.sfxNodes.push(windLfo);
+      } else {
+        // Vinyl Crackle
+        filter.type = 'highpass';
+        filter.frequency.setValueAtTime(1800, now);
+      }
+
+      noiseNode.connect(filter);
+      filter.connect(this.sfxGain);
+      noiseNode.start(now);
+      this.sfxNodes.push(noiseNode, filter);
+    } catch (e) {
+      console.warn('Ambient SFX synthesis warning:', e);
+    }
+  }
+
+  public stopAmbientSfx() {
+    this.sfxNodes.forEach((node) => {
+      try {
+        if ('stop' in node && typeof (node as any).stop === 'function') {
+          (node as any).stop();
+        }
+        node.disconnect();
+      } catch (_) {}
+    });
+    this.sfxNodes = [];
+  }
+
+  // ==========================================
   // Background Music Synthesizer
   // ==========================================
 
@@ -265,7 +532,91 @@ class AudioEngine {
     const now = this.ctx.currentTime;
 
     try {
-      if (style === 'Synthwave Pulse') {
+      if (style === 'Custom Track' && this.customAudioUrl) {
+        const audio = new Audio(this.customAudioUrl);
+        audio.loop = true;
+        audio.volume = this.nominalMusicVolume;
+        this.customMusicAudio = audio;
+        audio.play().catch((e) => console.warn('Custom track play error:', e));
+        return;
+      }
+
+      if (style === 'Afrobeat Groove' || style === 'Afro-Cyberpunk Fusion') {
+        const isCyber = style === 'Afro-Cyberpunk Fusion';
+
+        // Warm underlying pad drone
+        const padFilter = this.ctx.createBiquadFilter();
+        padFilter.type = 'lowpass';
+        padFilter.frequency.setValueAtTime(isCyber ? 420 : 320, now);
+
+        const padGain = this.ctx.createGain();
+        padGain.gain.setValueAtTime(0.16, now);
+
+        [110, 164.81, 196.0].forEach((freq) => {
+          const osc = this.ctx!.createOscillator();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now);
+          osc.connect(padFilter);
+          osc.start();
+          this.oscNodes.push(osc);
+        });
+        padFilter.connect(padGain);
+        padGain.connect(this.musicGain);
+
+        // 16-step Afrobeat poly-rhythmic sequencer
+        // Step duration in ms = (60 / BPM / 4) * 1000
+        const stepMs = Math.round((60 / this.afrobeatBpm / 4) * 1000);
+        // Classic West African 3-2 Afrobeat clave steps: 0, 3, 6, 10, 12
+        const claveSteps = new Set([0, 3, 6, 10, 12]);
+        // Syncopated Log-Drum bass steps: 0, 3, 7, 10, 14
+        const bassSteps: Record<number, number> = {
+          0: 55.0,    // A1
+          3: 55.0,    // A1
+          7: 65.41,   // C2
+          10: 73.42,  // D2
+          14: 82.41,  // E2
+        };
+        // Highlife / Afro-synth pentatonic pluck notes
+        const melodySteps: Record<number, number> = {
+          2: 220.0,   // A3
+          5: 261.63,  // C4
+          8: 293.66,  // D4
+          11: 329.63, // E4
+          15: 392.00, // G4
+        };
+
+        this.currentStep = 0;
+        const tick = () => {
+          if (!this.isPlayingMusic) return;
+          const step = this.currentStep % 16;
+
+          // 1. Log-drum sub bass
+          if (bassSteps[step]) {
+            this.triggerLogDrum(bassSteps[step], isCyber);
+          }
+
+          // 2. Syncopated Clave / Rimshot
+          if (claveSteps.has(step)) {
+            this.triggerClaveRimshot(step === 0 || step === 6);
+          }
+
+          // 3. Shekere / Shaker on every even step + syncopated 16ths
+          if (step % 2 === 0 || step === 3 || step === 11 || step === 15) {
+            this.triggerShaker(step % 4 === 2);
+          }
+
+          // 4. Highlife Guitar Pluck / Afro-Cyber Arpeggio
+          if (melodySteps[step]) {
+            this.triggerMelodicPluck(melodySteps[step], isCyber);
+          }
+
+          this.notifyStep(step, true);
+          this.currentStep = (this.currentStep + 1) % 16;
+        };
+
+        tick();
+        this.rhythmTimer = window.setInterval(tick, stepMs);
+      } else if (style === 'Synthwave Pulse') {
         // Deep pulsing 16th-note analog bass line
         const filter = this.ctx.createBiquadFilter();
         filter.type = 'lowpass';
@@ -358,6 +709,17 @@ class AudioEngine {
   }
 
   public stopMusic() {
+    if (this.rhythmTimer !== null) {
+      clearInterval(this.rhythmTimer);
+      this.rhythmTimer = null;
+    }
+    if (this.customMusicAudio) {
+      try {
+        this.customMusicAudio.pause();
+        this.customMusicAudio.currentTime = 0;
+      } catch (_) {}
+      this.customMusicAudio = null;
+    }
     this.oscNodes.forEach((node) => {
       try {
         node.stop();
@@ -367,6 +729,7 @@ class AudioEngine {
     this.oscNodes = [];
     this.isPlayingMusic = false;
     this.isDuckingActive = false;
+    this.notifyStep(0, false);
   }
 
   // Legacy manual ducking hook

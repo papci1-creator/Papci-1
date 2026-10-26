@@ -29,6 +29,14 @@ import {
   SlidersHorizontal,
   ChevronRight,
   AlertCircle,
+  MessageSquareQuote,
+  Zap,
+  Copy,
+  Plus,
+  Film,
+  RefreshCw,
+  X,
+  Bot,
 } from 'lucide-react';
 import {
   VISUAL_STYLES,
@@ -42,6 +50,7 @@ import { CharacterProfile, Scene } from '../types';
 import { CharacterManager } from './CharacterManager';
 import { audioEngine } from '../utils/audioEngine';
 import { parseStoryNLP, compileUnifiedVideoPrompt } from '../utils/nlpParser';
+import { StorySuggestion, fetchStoryCompletions } from '../services/autocompleteService';
 
 interface StoryStylePanelProps {
   storyText: string;
@@ -110,6 +119,57 @@ export const StoryStylePanel: React.FC<StoryStylePanelProps> = ({
 
   // NLP Auto-Detection of scenes, characters, dialogue and outfits
   const parsedSections = parseStoryNLP(storyText, characters, voiceActor);
+
+  // AI Auto-Completion State
+  const [isAutocompleteOpen, setIsAutocompleteOpen] = useState(false);
+  const [autocompleteLoading, setAutocompleteLoading] = useState(false);
+  const [autocompleteMode, setAutocompleteMode] = useState<'all' | 'dialogue' | 'scene_action' | 'continuation'>('all');
+  const [autocompleteCharId, setAutocompleteCharId] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<StorySuggestion[]>([]);
+  const [justInsertedId, setJustInsertedId] = useState<string | null>(null);
+  const [copiedSuggestionId, setCopiedSuggestionId] = useState<string | null>(null);
+
+  const handleFetchAutocomplete = async (
+    modeToUse: 'all' | 'dialogue' | 'scene_action' | 'continuation' = autocompleteMode,
+    charIdToUse: string | null = autocompleteCharId
+  ) => {
+    setAutocompleteLoading(true);
+    setIsAutocompleteOpen(true);
+    setAutocompleteMode(modeToUse);
+    setAutocompleteCharId(charIdToUse);
+
+    try {
+      const results = await fetchStoryCompletions({
+        currentText: storyText,
+        characters,
+        visualStyle,
+        mode: modeToUse,
+        selectedCharacterId: charIdToUse,
+      });
+      setSuggestions(results);
+    } catch (err) {
+      console.error('Error fetching autocomplete:', err);
+    } finally {
+      setAutocompleteLoading(false);
+    }
+  };
+
+  const handleApplySuggestion = (suggestion: StorySuggestion) => {
+    const content = suggestion.content.trim();
+    if (!storyText.trim()) {
+      setStoryText(content);
+    } else {
+      setStoryText(`${storyText.trim()}\n\n${content}`);
+    }
+    setJustInsertedId(suggestion.id);
+    setTimeout(() => setJustInsertedId(null), 1500);
+  };
+
+  const handleCopySuggestion = (suggestion: StorySuggestion) => {
+    navigator.clipboard.writeText(suggestion.content);
+    setCopiedSuggestionId(suggestion.id);
+    setTimeout(() => setCopiedSuggestionId(null), 1500);
+  };
 
   // Word & estimated duration calculation (~130 words per minute speaking rate)
   const words = storyText.trim() ? storyText.trim().split(/\s+/).length : 0;
@@ -311,10 +371,104 @@ export const StoryStylePanel: React.FC<StoryStylePanelProps> = ({
               </div>
             </div>
 
+            {/* AI-Powered Auto-Completion Bar */}
+            <div className="p-2.5 rounded-xl bg-gradient-to-r from-[#0d1424] via-[#0f172a] to-[#0d1424] border border-cyan-500/30 shadow-[0_0_15px_rgba(0,240,255,0.08)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="flex items-center gap-1 text-[11px] font-bold font-mono text-cyan-300">
+                  <Sparkles className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+                  <span>AI Auto-Complete:</span>
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => handleFetchAutocomplete('dialogue')}
+                  disabled={autocompleteLoading}
+                  className="px-2 py-1 rounded-md text-[10px] font-mono font-semibold bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/30 flex items-center gap-1 transition-all cursor-pointer shadow-[0_0_8px_rgba(168,85,247,0.15)] disabled:opacity-50"
+                  title="Suggest dramatic dialogue line based on character profiles"
+                >
+                  <MessageSquareQuote className="w-3 h-3 text-purple-400" />
+                  <span>+ Dialogue</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleFetchAutocomplete('scene_action')}
+                  disabled={autocompleteLoading}
+                  className="px-2 py-1 rounded-md text-[10px] font-mono font-semibold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 flex items-center gap-1 transition-all cursor-pointer shadow-[0_0_8px_rgba(255,170,0,0.15)] disabled:opacity-50"
+                  title="Suggest descriptive scene action prompt with lighting and camera motion"
+                >
+                  <Film className="w-3 h-3 text-amber-400" />
+                  <span>+ Scene Prompt</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleFetchAutocomplete('continuation')}
+                  disabled={autocompleteLoading}
+                  className="px-2 py-1 rounded-md text-[10px] font-mono font-semibold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 flex items-center gap-1 transition-all cursor-pointer shadow-[0_0_8px_rgba(16,185,129,0.15)] disabled:opacity-50"
+                  title="Suggest dramatic story continuation beat"
+                >
+                  <Zap className="w-3 h-3 text-emerald-400" />
+                  <span>+ Continue Beat</span>
+                </button>
+              </div>
+
+              {/* Character focus filter & toggle */}
+              <div className="flex items-center gap-1.5 self-end sm:self-center">
+                <select
+                  value={autocompleteCharId || ''}
+                  onChange={(e) => {
+                    const val = e.target.value || null;
+                    setAutocompleteCharId(val);
+                    if (isAutocompleteOpen) {
+                      handleFetchAutocomplete(autocompleteMode, val);
+                    }
+                  }}
+                  className="bg-[#090d18] border border-zinc-750 text-zinc-300 text-[10px] font-mono rounded px-1.5 py-1 focus:outline-none focus:border-cyan-500 cursor-pointer"
+                  title="Target specific character for completions"
+                >
+                  <option value="">All Cast (Auto)</option>
+                  {characters.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.tag} ({c.name})
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!isAutocompleteOpen && suggestions.length === 0) {
+                      handleFetchAutocomplete('all');
+                    } else {
+                      setIsAutocompleteOpen(!isAutocompleteOpen);
+                    }
+                  }}
+                  className={`px-2 py-1 rounded-md text-[10px] font-mono font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                    isAutocompleteOpen
+                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                      : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
+                  }`}
+                  title="Open or close AI suggestions panel"
+                >
+                  <Bot className="w-3 h-3 text-cyan-400" />
+                  <span>{isAutocompleteOpen ? 'Hide' : 'Suggestions'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Script Textarea Input */}
             <div className="relative rounded-xl border border-zinc-800 bg-[#090b12] focus-within:border-cyan-500/60 focus-within:shadow-[0_0_15px_rgba(0,240,255,0.15)] transition-all">
               <textarea
                 value={storyText}
                 onChange={(e) => setStoryText(e.target.value)}
+                onKeyDown={(e) => {
+                  // Ctrl+Space shortcut to trigger AI completions
+                  if ((e.ctrlKey || e.metaKey) && e.code === 'Space') {
+                    e.preventDefault();
+                    handleFetchAutocomplete();
+                  }
+                }}
                 placeholder="Write your story, screenplay, or creative scenes here. Tag characters using @Name (e.g. @Leo, @Aria, @Malakor) so the AI locks their reference turnaround sheet into every video prompt..."
                 rows={7}
                 className="w-full bg-transparent p-3 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none resize-none leading-relaxed font-sans"
@@ -322,9 +476,18 @@ export const StoryStylePanel: React.FC<StoryStylePanelProps> = ({
 
               {/* Footer bar inside textarea */}
               <div className="px-3 py-1.5 border-t border-zinc-850 flex items-center justify-between bg-[#0e121d]/60 rounded-b-xl text-[10px] font-mono">
-                <div className="text-zinc-400 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                  <span>Character prompt blending ready</span>
+                <div className="text-zinc-400 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleFetchAutocomplete('all')}
+                    disabled={autocompleteLoading}
+                    className="bg-cyan-950/70 hover:bg-cyan-900/80 border border-cyan-500/40 text-cyan-300 px-2 py-0.5 rounded cursor-pointer transition-colors flex items-center gap-1 font-semibold"
+                    title="Press Ctrl+Space to auto-complete"
+                  >
+                    <Sparkles className="w-3 h-3 text-cyan-400 animate-pulse" />
+                    <span>AI Auto-Complete</span>
+                  </button>
+                  <span className="hidden sm:inline text-zinc-500">Ctrl+Space</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <button
@@ -342,6 +505,183 @@ export const StoryStylePanel: React.FC<StoryStylePanelProps> = ({
                 </div>
               </div>
             </div>
+
+            {/* AI AUTO-COMPLETION SUGGESTIONS DRAWER */}
+            {isAutocompleteOpen && (
+              <div className="p-3 bg-[#0a0e1a] border border-cyan-500/35 rounded-2xl space-y-2.5 shadow-xl transition-all">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-lg bg-cyan-950/80 border border-cyan-500/50 flex items-center justify-center text-cyan-400">
+                      <Sparkles className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <h4 className="text-xs font-bold text-white font-mono uppercase tracking-wider">
+                          AI Suggestions
+                        </h4>
+                        <span className="px-1.5 py-0.2 rounded bg-cyan-950 text-cyan-300 border border-cyan-800 text-[9px] font-mono">
+                          Gemini 3.8 Flash
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-zinc-400">
+                        Dramatic dialogue & scene prompts tailored to character profiles.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleFetchAutocomplete(autocompleteMode, autocompleteCharId)}
+                      disabled={autocompleteLoading}
+                      className="p-1 rounded-lg bg-zinc-850 hover:bg-zinc-800 text-zinc-300 hover:text-cyan-300 border border-zinc-750 transition-colors cursor-pointer"
+                      title="Regenerate fresh suggestions"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${autocompleteLoading ? 'animate-spin text-cyan-400' : ''}`} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsAutocompleteOpen(false)}
+                      className="p-1 rounded-lg bg-zinc-850 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-750 transition-colors cursor-pointer"
+                      title="Close suggestions panel"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Filter Mode Pills */}
+                <div className="flex items-center gap-1 bg-[#060810] p-1 rounded-lg border border-zinc-850 text-[10px] font-mono">
+                  {[
+                    { id: 'all', label: 'All Curated' },
+                    { id: 'dialogue', label: 'Dramatic Dialogue' },
+                    { id: 'scene_action', label: 'Scene Action' },
+                    { id: 'continuation', label: 'Story Beats' },
+                  ].map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => handleFetchAutocomplete(m.id as any, autocompleteCharId)}
+                      className={`px-2 py-0.5 rounded font-semibold transition-all cursor-pointer ${
+                        autocompleteMode === m.id
+                          ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                          : 'text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Loading Indicator */}
+                {autocompleteLoading && (
+                  <div className="p-4 rounded-xl bg-[#070a12] border border-cyan-500/20 flex items-center justify-center gap-2.5 text-xs font-mono text-cyan-300">
+                    <RefreshCw className="w-4 h-4 animate-spin text-cyan-400" />
+                    <span>Analyzing character roster and drafting cinematic prompts...</span>
+                  </div>
+                )}
+
+                {/* Suggestions List */}
+                {!autocompleteLoading && suggestions.length > 0 && (
+                  <div className="space-y-2">
+                    {suggestions.map((sug) => {
+                      const isInserted = justInsertedId === sug.id;
+                      const isCopied = copiedSuggestionId === sug.id;
+                      const matchingChar = characters.find(
+                        (c) =>
+                          c.tag.toLowerCase() === sug.characterTag?.toLowerCase() ||
+                          c.name.toLowerCase() === sug.characterName?.toLowerCase()
+                      );
+
+                      return (
+                        <div
+                          key={sug.id}
+                          className="p-2.5 rounded-xl bg-[#070a14] border border-zinc-800 hover:border-cyan-500/40 transition-all space-y-1.5"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {/* Type Badge */}
+                              <span
+                                className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wider flex items-center gap-1 ${
+                                  sug.type === 'dialogue'
+                                    ? 'bg-purple-950/60 text-purple-300 border border-purple-500/30'
+                                    : sug.type === 'scene_action'
+                                    ? 'bg-amber-950/60 text-amber-300 border border-amber-500/30'
+                                    : 'bg-emerald-950/60 text-emerald-300 border border-emerald-500/30'
+                                }`}
+                              >
+                                {sug.type === 'dialogue' ? (
+                                  <MessageSquareQuote className="w-2.5 h-2.5" />
+                                ) : sug.type === 'scene_action' ? (
+                                  <Film className="w-2.5 h-2.5" />
+                                ) : (
+                                  <Zap className="w-2.5 h-2.5" />
+                                )}
+                                <span>{sug.label}</span>
+                              </span>
+
+                              {/* Character Tag */}
+                              <span className="px-1.5 py-0.5 rounded bg-zinc-850 text-cyan-300 border border-zinc-750 text-[10px] font-mono flex items-center gap-1">
+                                <span
+                                  className="w-1.5 h-1.5 rounded-full"
+                                  style={{ backgroundColor: matchingChar?.colorAccent || '#00f0ff' }}
+                                />
+                                <span className="font-bold">{sug.characterTag || `@${sug.characterName}`}</span>
+                                <span className="text-zinc-500">
+                                  ({sug.characterRole || matchingChar?.role || 'Cast'})
+                                </span>
+                              </span>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleCopySuggestion(sug)}
+                                className="p-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] flex items-center gap-1 transition-colors cursor-pointer"
+                                title="Copy to clipboard"
+                              >
+                                {isCopied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleApplySuggestion(sug)}
+                                className="px-2 py-0.5 rounded bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-[10px] flex items-center gap-1 transition-all cursor-pointer shadow-[0_0_8px_rgba(0,240,255,0.25)]"
+                                title="Insert into screenplay text"
+                              >
+                                {isInserted ? (
+                                  <>
+                                    <Check className="w-3 h-3" />
+                                    <span>Inserted!</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Plus className="w-3 h-3" />
+                                    <span>Insert</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Content text */}
+                          <p className="text-xs text-zinc-200 font-sans leading-relaxed bg-[#05070c] p-2 rounded-lg border border-zinc-850">
+                            {sug.content}
+                          </p>
+
+                          {/* Rationale */}
+                          {sug.rationale && (
+                            <p className="text-[10px] text-zinc-400 italic">
+                              💡 {sug.rationale}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* NLP Auto-Detection & Scene Override Controls */}
             {parsedSections.length > 0 && (

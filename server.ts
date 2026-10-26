@@ -578,6 +578,145 @@ Output a strictly valid JSON object:
   });
 });
 
+// API: AI-Powered Auto-Completion for Story Script (Dramatic Dialogue & Descriptive Scene Action)
+app.post('/api/story/autocomplete', async (req: Request, res: Response) => {
+  const {
+    currentText = '',
+    characters = [],
+    visualStyle = 'Cinematic',
+    mode = 'all', // 'all' | 'dialogue' | 'scene_action' | 'continuation'
+    selectedCharacterId,
+  } = req.body;
+
+  // Selected character preference if provided
+  const preferredChar = Array.isArray(characters) && selectedCharacterId
+    ? characters.find((c: any) => c.id === selectedCharacterId)
+    : null;
+
+  // 1. Try Gemini 3.8 Flash if client is active
+  if (aiClient) {
+    try {
+      const charRoster = Array.isArray(characters) && characters.length > 0
+        ? characters
+            .map(
+              (c: any) =>
+                `• ${c.name} (${c.tag}, Role: ${c.role}): Physical: ${c.faceDescription || c.description || 'Distinctive'}. Assigned Voice: ${c.assignedVoice || 'Natural'}. Outfits: ${c.outfits?.map((o: any) => o.name).join(', ') || 'Standard'}`
+            )
+            .join('\n')
+        : '• Elena (@Elena, Role: Rebel Pilot)\n• Malakor (@Malakor, Role: Syndicate Boss)';
+
+      const modeInstruction = mode === 'dialogue'
+        ? 'Generate 3 high-intensity dramatic dialogue lines spoken by the characters, tagging them with @Tag.'
+        : mode === 'scene_action'
+        ? 'Generate 3 descriptive, visually striking scene action beats suitable for AI video generation, featuring character physical actions, lighting, and camera motion.'
+        : mode === 'continuation'
+        ? 'Generate 3 compelling story progression beats that naturally escalate the plot and involve the characters.'
+        : 'Generate a curated mix: 1 intense dramatic dialogue line, 1 vivid descriptive scene action prompt, and 1 high-stakes plot escalation beat.';
+
+      const systemInstruction = `You are a master Hollywood screenplay writer, art director, and narrative AI assistant.
+Your goal is to suggest 3 creative, high-impact auto-completions to continue or enhance the user's screenplay.
+Every suggestion MUST integrate the provided character profiles (using @Tag formatting like @Leo, @Malakor, @Elena) and fit the visual aesthetic of "${visualStyle}".`;
+
+      const prompt = `Current Script Context:
+"""
+${currentText.trim() ? currentText.trim().slice(-1200) : '[Beginning of Story / Opening Scene]'}
+"""
+
+Available Character Profiles:
+${charRoster}
+${preferredChar ? `(Prioritize character: ${preferredChar.name} [${preferredChar.tag}])` : ''}
+
+Visual Style Theme: ${visualStyle}
+Request Mode: ${mode}
+${modeInstruction}
+
+Output a strictly valid JSON object with the following schema:
+{
+  "suggestions": [
+    {
+      "id": "sug-1",
+      "type": "dialogue",
+      "characterTag": "@CharacterTag",
+      "characterName": "Character Name",
+      "characterRole": "Character Role",
+      "label": "Short punchy label (max 4 words, e.g. 'Defiant Ultimatum', 'Shadow Infiltration')",
+      "content": "The actual text to insert or append into the screenplay (1-3 sentences, engaging, well-formatted)",
+      "rationale": "Brief 1-sentence explanation of why this fits character psychology or cinematic pacing"
+    }
+  ]
+}
+
+Return ONLY raw JSON. No markdown ticks, no commentary.`;
+
+      const response = await aiClient.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+        config: {
+          systemInstruction,
+          responseMimeType: 'application/json',
+          temperature: 0.85,
+        },
+      });
+
+      const responseText = response.text?.trim() || '';
+      let parsed: any = null;
+      try {
+        parsed = JSON.parse(responseText);
+      } catch {
+        const cleaned = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+        parsed = JSON.parse(cleaned);
+      }
+
+      if (parsed && Array.isArray(parsed.suggestions) && parsed.suggestions.length > 0) {
+        res.json({ suggestions: parsed.suggestions });
+        return;
+      }
+    } catch (err) {
+      console.warn('Gemini auto-complete call failed, engaging cinematic rule-based generator:', err);
+    }
+  }
+
+  // 2. Comprehensive rule-based fallback generator
+  const char1 = preferredChar || (characters.length > 0 ? characters[0] : null) || { name: 'Elena', tag: '@Elena', role: 'Rebel Pilot' };
+  const char2 = (characters.length > 1 ? characters[1] : null) || { name: 'Malakor', tag: '@Malakor', role: 'Syndicate Enforcer' };
+  const char3 = (characters.length > 2 ? characters[2] : null) || char1;
+
+  const fallbackSuggestions = [
+    {
+      id: `sug-${Date.now()}-1`,
+      type: 'dialogue',
+      characterTag: char1.tag || `@${char1.name}`,
+      characterName: char1.name,
+      characterRole: char1.role,
+      label: 'Dramatic Ultimatum',
+      content: `${char1.tag || `@${char1.name}`}: "The mainframe encryption has a five-minute failsafe. If we don't breach the vault now, the whole sector burns with us."`,
+      rationale: `High-stakes spoken dialogue tailored to ${char1.name}'s role as ${char1.role}.`,
+    },
+    {
+      id: `sug-${Date.now()}-2`,
+      type: 'scene_action',
+      characterTag: char2.tag || `@${char2.name}`,
+      characterName: char2.name,
+      characterRole: char2.role,
+      label: 'Atmospheric Entrance',
+      content: `${char2.tag || `@${char2.name}`} steps into the harsh volumetric glare, steam coiling from industrial vents as their silhouette casts long shadows across the rain-slicked catwalk.`,
+      rationale: `Visually descriptive scene beat emphasizing ${visualStyle} lighting and environmental texture.`,
+    },
+    {
+      id: `sug-${Date.now()}-3`,
+      type: 'continuation',
+      characterTag: char3.tag || `@${char3.name}`,
+      characterName: char3.name,
+      characterRole: char3.role,
+      label: 'High-Stakes Escalation',
+      content: `A sudden deafening pulse reverberates through the bulkhead. ${char3.tag || `@${char3.name}`} readies their weapon, eyes locked on the flickering monitors: "They bypassed the perimeter security. We're not alone in here."`,
+      rationale: `Combines narrative momentum with immediate cinematic action for the next scene transition.`,
+    },
+  ];
+
+  res.json({ suggestions: fallbackSuggestions });
+});
+
 // API: Backend NLP Parser to scan story text for characters, outfits, dialogue, and scenes
 app.post('/api/nlp-parse', (req: Request, res: Response) => {
   const { story = '', characters = [], defaultVoice = 'Male Deep Narrator' } = req.body;
@@ -744,6 +883,435 @@ app.post('/api/characters/generate-portrait', async (req: Request, res: Response
     simulated: true,
   });
 });
+
+// Helper for theme visual palette in posters
+function getPosterThemeAssets(theme: string) {
+  const t = theme.toLowerCase();
+  if (t.includes('cyber') || t.includes('neon') || t.includes('future')) {
+    return {
+      topColor: '#03050c',
+      midColor: '#0a0e24',
+      bottomColor: '#020308',
+      accentColor: '#00f0ff',
+      secondaryAccent: '#ff007f',
+      glowColor: 'rgba(0, 240, 255, 0.5)',
+      badgeColor: '#00f0ff',
+      styleName: 'CYBERPUNK NEO-NOIR',
+      bgType: 'cyberpunk',
+    };
+  }
+  if (t.includes('sci-fi') || t.includes('space') || t.includes('cosmic') || t.includes('orbit')) {
+    return {
+      topColor: '#02040d',
+      midColor: '#07162c',
+      bottomColor: '#010206',
+      accentColor: '#38bdf8',
+      secondaryAccent: '#a855f7',
+      glowColor: 'rgba(56, 189, 248, 0.45)',
+      badgeColor: '#38bdf8',
+      styleName: 'DEEP SPACE SCI-FI',
+      bgType: 'scifi',
+    };
+  }
+  if (t.includes('noir') || t.includes('detective') || t.includes('crime')) {
+    return {
+      topColor: '#08080a',
+      midColor: '#1c1917',
+      bottomColor: '#050507',
+      accentColor: '#f59e0b',
+      secondaryAccent: '#ea580c',
+      glowColor: 'rgba(245, 158, 11, 0.4)',
+      badgeColor: '#fbbf24',
+      styleName: 'CINEMATIC NEO-NOIR',
+      bgType: 'noir',
+    };
+  }
+  if (t.includes('fantasy') || t.includes('mythic') || t.includes('magic')) {
+    return {
+      topColor: '#080314',
+      midColor: '#200e3b',
+      bottomColor: '#04010a',
+      accentColor: '#c084fc',
+      secondaryAccent: '#facc15',
+      glowColor: 'rgba(192, 132, 252, 0.5)',
+      badgeColor: '#facc15',
+      styleName: 'EPIC HIGH FANTASY',
+      bgType: 'fantasy',
+    };
+  }
+  if (t.includes('horror') || t.includes('dark') || t.includes('thriller')) {
+    return {
+      topColor: '#090204',
+      midColor: '#26060c',
+      bottomColor: '#030102',
+      accentColor: '#ef4444',
+      secondaryAccent: '#f97316',
+      glowColor: 'rgba(239, 68, 68, 0.5)',
+      badgeColor: '#ef4444',
+      styleName: 'PSYCHOLOGICAL THRILLER',
+      bgType: 'horror',
+    };
+  }
+  if (t.includes('anime') || t.includes('animation')) {
+    return {
+      topColor: '#0b1026',
+      midColor: '#311042',
+      bottomColor: '#050714',
+      accentColor: '#f43f5e',
+      secondaryAccent: '#38bdf8',
+      glowColor: 'rgba(244, 63, 94, 0.45)',
+      badgeColor: '#f43f5e',
+      styleName: 'ANIME CINEMA',
+      bgType: 'anime',
+    };
+  }
+  return {
+    topColor: '#07090e',
+    midColor: '#111827',
+    bottomColor: '#030407',
+    accentColor: '#38bdf8',
+    secondaryAccent: '#f59e0b',
+    glowColor: 'rgba(56, 189, 248, 0.4)',
+    badgeColor: '#38bdf8',
+    styleName: 'CINEMATIC DRAMA',
+    bgType: 'cinematic',
+  };
+}
+
+// Generate rich cinematic SVG movie poster
+function generateCinematicPosterSvg(params: {
+  title: string;
+  tagline: string;
+  theme: string;
+  aspectRatio: '2:3' | '3:4' | '16:9';
+  billingCast: string;
+  directorCredit: string;
+  releaseDate: string;
+  lightingStyle: string;
+}) {
+  const { title, tagline, theme, aspectRatio, billingCast, directorCredit, releaseDate } = params;
+  const cfg = getPosterThemeAssets(theme);
+
+  let width = 600;
+  let height = 900;
+  if (aspectRatio === '3:4') {
+    width = 600;
+    height = 800;
+  } else if (aspectRatio === '16:9') {
+    width = 960;
+    height = 540;
+  }
+
+  const isWide = aspectRatio === '16:9';
+  const titleY = isWide ? 380 : height * 0.70;
+  const taglineY = isWide ? 425 : height * 0.76;
+  const castY = isWide ? 465 : height * 0.81;
+  const billingY = isWide ? 495 : height * 0.85;
+  const footerY = isWide ? 520 : height * 0.94;
+
+  const titleLines = title.length > 22 && !isWide ? [title.slice(0, 20), title.slice(20)] : [title];
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">
+    <defs>
+      <linearGradient id="pst-sky" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="${cfg.topColor}"/>
+        <stop offset="45%" stop-color="${cfg.midColor}"/>
+        <stop offset="80%" stop-color="${cfg.bottomColor}"/>
+        <stop offset="100%" stop-color="#000000"/>
+      </linearGradient>
+      <radialGradient id="pst-keyglow" cx="50%" cy="${isWide ? '45%' : '38%'}" r="55%">
+        <stop offset="0%" stop-color="${cfg.accentColor}" stop-opacity="0.45"/>
+        <stop offset="50%" stop-color="${cfg.secondaryAccent}" stop-opacity="0.15"/>
+        <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+      </radialGradient>
+      <linearGradient id="pst-vignette" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#000000" stop-opacity="0.6"/>
+        <stop offset="35%" stop-color="#000000" stop-opacity="0"/>
+        <stop offset="65%" stop-color="#000000" stop-opacity="0.2"/>
+        <stop offset="100%" stop-color="#000000" stop-opacity="0.95"/>
+      </linearGradient>
+      <filter id="pst-glow">
+        <feGaussianBlur stdDeviation="3" result="blur"/>
+        <feMerge>
+          <feMergeNode in="blur"/>
+          <feMergeNode in="SourceGraphic"/>
+        </feMerge>
+      </filter>
+    </defs>
+
+    <!-- Base Canvas & Atmosphere -->
+    <rect width="${width}" height="${height}" fill="url(#pst-sky)"/>
+    <rect width="${width}" height="${height}" fill="url(#pst-keyglow)"/>
+
+    <!-- Key Art Silhouette & Graphic Elements based on theme -->
+    ${cfg.bgType === 'cyberpunk' ? `
+      <!-- Cyberpunk Skyline & Neon Grids -->
+      <line x1="0" y1="${height * 0.5}" x2="${width}" y2="${height * 0.5}" stroke="${cfg.accentColor}" stroke-opacity="0.3" stroke-width="1.5"/>
+      <path d="M 0 ${height * 0.55} L ${width * 0.2} ${height * 0.35} L ${width * 0.35} ${height * 0.42} L ${width * 0.5} ${height * 0.25} L ${width * 0.65} ${height * 0.4} L ${width * 0.8} ${height * 0.3} L ${width} ${height * 0.48} L ${width} ${height} L 0 ${height} Z" fill="#04060c" opacity="0.95"/>
+      <circle cx="${width * 0.5}" cy="${height * 0.32}" r="${isWide ? 100 : 130}" fill="none" stroke="${cfg.secondaryAccent}" stroke-width="2.5" opacity="0.6" stroke-dasharray="10,6"/>
+      <line x1="${width * 0.5}" y1="0" x2="${width * 0.5}" y2="${height * 0.45}" stroke="${cfg.accentColor}" stroke-width="1.5" opacity="0.4"/>
+      <!-- Neon Beams -->
+      <polygon points="${width * 0.5},${height * 0.28} ${width * 0.15},${height * 0.65} ${width * 0.85},${height * 0.65}" fill="${cfg.accentColor}" opacity="0.08"/>
+      <!-- Silhouetted Hero -->
+      <ellipse cx="${width * 0.5}" cy="${height * 0.48}" rx="28" ry="60" fill="#020306"/>
+      <circle cx="${width * 0.5}" cy="${height * 0.41}" r="18" fill="#020306"/>
+    ` : cfg.bgType === 'scifi' ? `
+      <!-- Celestial Ring & Monolith -->
+      <circle cx="${width * 0.5}" cy="${height * 0.35}" r="${isWide ? 110 : 150}" fill="#0a1226"/>
+      <ellipse cx="${width * 0.5}" cy="${height * 0.35}" rx="${isWide ? 260 : 250}" ry="45" fill="none" stroke="${cfg.accentColor}" stroke-width="3" opacity="0.75" transform="rotate(-18 ${width * 0.5} ${height * 0.35})"/>
+      <ellipse cx="${width * 0.5}" cy="${height * 0.35}" rx="${isWide ? 220 : 210}" ry="35" fill="none" stroke="${cfg.secondaryAccent}" stroke-width="1.5" opacity="0.4" transform="rotate(-18 ${width * 0.5} ${height * 0.35})"/>
+      <polygon points="${width * 0.47},${height * 0.2} ${width * 0.53},${height * 0.2} ${width * 0.55},${height * 0.52} ${width * 0.45},${height * 0.52}" fill="#030712" stroke="${cfg.accentColor}" stroke-width="1.5"/>
+      <circle cx="${width * 0.5}" cy="${height * 0.22}" r="6" fill="${cfg.accentColor}" filter="url(#pst-glow)"/>
+    ` : cfg.bgType === 'noir' ? `
+      <!-- Rain & Venetian Shadows -->
+      <polygon points="${width * 0.4},0 ${width * 0.6},0 ${width * 0.85},${height * 0.65} ${width * 0.15},${height * 0.65}" fill="${cfg.accentColor}" opacity="0.12"/>
+      <line x1="0" y1="${height * 0.25}" x2="${width}" y2="${height * 0.32}" stroke="#000" stroke-width="12" opacity="0.5"/>
+      <line x1="0" y1="${height * 0.32}" x2="${width}" y2="${height * 0.39}" stroke="#000" stroke-width="12" opacity="0.5"/>
+      <line x1="0" y1="${height * 0.39}" x2="${width}" y2="${height * 0.46}" stroke="#000" stroke-width="12" opacity="0.5"/>
+      <!-- Detective Silhouette -->
+      <ellipse cx="${width * 0.5}" cy="${height * 0.47}" rx="32" ry="70" fill="#030305"/>
+      <ellipse cx="${width * 0.5}" cy="${height * 0.38}" rx="28" ry="10" fill="#030305"/>
+      <circle cx="${width * 0.5}" cy="${height * 0.37}" r="16" fill="#030305"/>
+    ` : cfg.bgType === 'horror' ? `
+      <!-- Dark Spire & Blood Moon -->
+      <circle cx="${width * 0.5}" cy="${height * 0.32}" r="${isWide ? 85 : 120}" fill="${cfg.accentColor}" opacity="0.85"/>
+      <polygon points="${width * 0.5},${height * 0.16} ${width * 0.38},${height * 0.58} ${width * 0.62},${height * 0.58}" fill="#020103"/>
+      <line x1="0" y1="${height * 0.5}" x2="${width}" y2="${height * 0.5}" stroke="${cfg.secondaryAccent}" stroke-opacity="0.4" stroke-width="1"/>
+    ` : `
+      <!-- Dramatic Cinematic Arch -->
+      <circle cx="${width * 0.5}" cy="${height * 0.35}" r="${isWide ? 100 : 140}" fill="none" stroke="${cfg.accentColor}" stroke-width="3" opacity="0.6"/>
+      <polygon points="${width * 0.5},${height * 0.18} ${width * 0.35},${height * 0.55} ${width * 0.65},${height * 0.55}" fill="#05070e"/>
+      <circle cx="${width * 0.5}" cy="${height * 0.28}" r="14" fill="${cfg.secondaryAccent}" opacity="0.85"/>
+    `}
+
+    <!-- Film Vignette Gradient -->
+    <rect width="${width}" height="${height}" fill="url(#pst-vignette)"/>
+
+    <!-- Festival Laurel at Top -->
+    <g transform="translate(${width * 0.5}, ${isWide ? 38 : 55}) scale(${isWide ? 0.75 : 0.95})">
+      <path d="M -70 -12 C -60 -24, -40 -30, -25 -25 C -40 -20, -50 -10, -55 5 C -45 0, -30 2, -18 10 C -30 10, -42 18, -45 32 C -35 25, -20 25, -10 32" fill="none" stroke="${cfg.badgeColor}" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M 70 -12 C 60 -24, 40 -30, 25 -25 C 40 -20, 50 -10, 55 5 C 45 0, 30 2, 18 10 C 30 10, 42 18, 45 32 C 35 25, 20 25, 10 32" fill="none" stroke="${cfg.badgeColor}" stroke-width="1.8" stroke-linecap="round"/>
+      <text x="0" y="-8" font-family="'Cinzel', 'Trajan Pro', 'Georgia', serif" font-size="9" fill="${cfg.badgeColor}" font-weight="bold" letter-spacing="3" text-anchor="middle">★ OFFICIAL SELECTION ★</text>
+      <text x="0" y="8" font-family="'Cinzel', 'Trajan Pro', 'Georgia', serif" font-size="11" fill="#ffffff" font-weight="bold" letter-spacing="4" text-anchor="middle">INTERNATIONAL FILM FESTIVAL</text>
+      <text x="0" y="22" font-family="sans-serif" font-size="8" fill="#94a3b8" letter-spacing="2" text-anchor="middle">WINNER • BEST CINEMATOGRAPHY</text>
+    </g>
+
+    <!-- Studio Banner -->
+    <text x="${width * 0.5}" y="${isWide ? 90 : 120}" font-family="'Courier New', monospace" font-size="9" fill="#94a3b8" letter-spacing="4" text-anchor="middle" font-weight="600">STORYCAST AI STUDIOS PRESENTS</text>
+
+    <!-- Theatrical Title -->
+    <g transform="translate(${width * 0.5}, ${titleY})">
+      ${titleLines.map((line, idx) => {
+        const yOffset = (idx - (titleLines.length - 1) / 2) * (isWide ? 38 : 46);
+        return `
+          <text x="0" y="${yOffset + 2}" font-family="'Impact', 'Arial Black', sans-serif" font-size="${isWide ? 40 : 44}" fill="#000000" letter-spacing="6" text-anchor="middle" font-weight="900" opacity="0.8">${line.toUpperCase()}</text>
+          <text x="0" y="${yOffset}" font-family="'Impact', 'Arial Black', sans-serif" font-size="${isWide ? 40 : 44}" fill="#ffffff" letter-spacing="6" text-anchor="middle" font-weight="900" filter="url(#pst-glow)">${line.toUpperCase()}</text>
+          <text x="0" y="${yOffset}" font-family="'Impact', 'Arial Black', sans-serif" font-size="${isWide ? 40 : 44}" fill="url(#pst-sky)" letter-spacing="6" text-anchor="middle" font-weight="900" opacity="0.3">${line.toUpperCase()}</text>
+        `;
+      }).join('')}
+    </g>
+
+    <!-- Cinematic Tagline -->
+    <text x="${width * 0.5}" y="${taglineY}" font-family="'Georgia', serif" font-style="italic" font-size="${isWide ? 13 : 14}" fill="${cfg.accentColor}" letter-spacing="2" text-anchor="middle" font-weight="bold">"${tagline}"</text>
+
+    <!-- Top Cast Line -->
+    <text x="${width * 0.5}" y="${castY}" font-family="'Courier New', monospace" font-size="${isWide ? 10 : 11}" fill="#cbd5e1" letter-spacing="3" text-anchor="middle" font-weight="bold">${billingCast.toUpperCase()}</text>
+
+    <!-- Theatrical Billing Block (Authentic condensed block) -->
+    <g transform="translate(${width * 0.5}, ${billingY})">
+      <text x="0" y="0" font-family="'Arial Narrow', 'Franklin Gothic Medium', sans-serif" font-size="7.5" fill="#94a3b8" letter-spacing="1.5" text-anchor="middle">
+        A FILM BY ${directorCredit.toUpperCase()} • SCREENPLAY PROMPTED BY STORYCAST ENGINE • MUSIC BY ARTIFICIAL INTELLIGENCE
+      </text>
+      <text x="0" y="11" font-family="'Arial Narrow', 'Franklin Gothic Medium', sans-serif" font-size="7" fill="#64748b" letter-spacing="1.2" text-anchor="middle">
+        DIRECTOR OF PHOTOGRAPHY ROGER DEAKINS ASC • PRODUCTION DESIGN DANTE FERRETTI • COSTUME CONTINUITY AI LOCK
+      </text>
+      <text x="0" y="21" font-family="'Arial Narrow', 'Franklin Gothic Medium', sans-serif" font-size="6.5" fill="#475569" letter-spacing="1.5" text-anchor="middle">
+        PRODUCED BY STORYCAST AI ENTERTAINMENT • SOUNDTRACK AVAILABLE ON DOLBY ATMOS • COPYRIGHT © 2026 ALL RIGHTS RESERVED
+      </text>
+    </g>
+
+    <!-- Bottom Badges & Release Date -->
+    <g transform="translate(${width * 0.5}, ${footerY})">
+      <!-- MPAA Rating -->
+      <rect x="${-width * 0.35}" y="-11" width="36" height="15" fill="none" stroke="#64748b" stroke-width="1" rx="2"/>
+      <text x="${-width * 0.35 + 18}" y="0" font-family="sans-serif" font-size="8" fill="#94a3b8" font-weight="bold" text-anchor="middle">PG-13</text>
+
+      <!-- Sound Format Badges -->
+      <text x="${-width * 0.18}" y="0" font-family="'Courier New', monospace" font-size="9" fill="#94a3b8" letter-spacing="1" font-weight="bold" text-anchor="middle">[DOLBY CINEMA]</text>
+      <text x="${width * 0.18}" y="0" font-family="'Courier New', monospace" font-size="9" fill="#94a3b8" letter-spacing="1" font-weight="bold" text-anchor="middle">[IMAX 70MM]</text>
+
+      <!-- Release Date Callout -->
+      <text x="${width * 0.35}" y="0" font-family="'Courier New', monospace" font-size="8.5" fill="${cfg.accentColor}" letter-spacing="1" font-weight="bold" text-anchor="middle">${releaseDate.toUpperCase()}</text>
+    </g>
+  </svg>`.trim();
+}
+
+// API: Generate Cinematic Movie Poster
+app.post('/api/generate-poster', async (req: Request, res: Response) => {
+  const {
+    storyTitle = 'Neo-Tokyo 2099: The Ghost Shard',
+    theme = 'Cyberpunk Neo-Noir',
+    tagline,
+    aspectRatio = '2:3',
+    billingCast = 'Elena Vance • Kaelen Cross • Dr. Arlo Vance',
+    directorCredit = 'Directed by Austin Vance',
+    releaseDate = 'IN THEATERS & IMAX THIS FALL',
+    lightingStyle = 'Anamorphic Teal & Orange',
+    prompt,
+  } = req.body;
+
+  const cleanTitle = (storyTitle || 'Untitled Movie').replace(/[<>&"']/g, '').trim().slice(0, 60);
+  const cleanTheme = (theme || 'Cinematic Sci-Fi').replace(/[<>&"']/g, '').trim().slice(0, 50);
+  const cleanCast = (billingCast || 'Elena Vance • Kaelen Cross').replace(/[<>&"']/g, '').trim().slice(0, 100);
+  const cleanDirector = (directorCredit || 'Directed by StoryCast Studios').replace(/[<>&"']/g, '').trim().slice(0, 60);
+  const cleanRelease = (releaseDate || 'IN THEATERS THIS FALL').replace(/[<>&"']/g, '').trim().slice(0, 40);
+
+  // Generate or fallback tagline
+  let finalTagline = tagline ? tagline.replace(/[<>&"']/g, '').trim() : '';
+  if (!finalTagline) {
+    if (aiClient) {
+      try {
+        const taglinePrompt = `You are a legendary Hollywood movie poster copywriter. Write a single dramatic, high-impact movie poster tagline (under 10 words, no quotation marks) for a movie titled "${cleanTitle}" with theme/genre "${cleanTheme}".`;
+        const geminiRes = await aiClient.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: taglinePrompt,
+        });
+        const generated = geminiRes.text?.trim().replace(/^["']|["']$/g, '');
+        if (generated && generated.length > 5) {
+          finalTagline = generated;
+        }
+      } catch (e: any) {
+        console.warn('Gemini poster tagline generation error:', e?.message || e);
+      }
+    }
+    if (!finalTagline) {
+      const fallbackTaglines: Record<string, string> = {
+        cyberpunk: 'In a city of neon ghosts, the truth is the rarest currency.',
+        scifi: 'Beyond the edge of human comprehension lies our next beginning.',
+        noir: 'Some secrets should never be brought into the light.',
+        fantasy: 'When legends awaken, destinies are forged in eternal flame.',
+        horror: 'Silence is the only warning before the dark.',
+        anime: 'Their souls were bound by starlight across infinite dimensions.',
+      };
+      const key = Object.keys(fallbackTaglines).find((k) => cleanTheme.toLowerCase().includes(k)) || 'scifi';
+      finalTagline = fallbackTaglines[key] || 'The legend begins where hope ends.';
+    }
+  }
+
+  const masterPrompt =
+    prompt ||
+    `Cinematic movie poster key art for "${cleanTitle}", a dramatic ${cleanTheme} film. Tagline: "${finalTagline}". Visual style: ${lightingStyle}. Highly detailed, 8k resolution, dramatic volumetric lighting, anamorphic lens flares, movie one-sheet composition, moody cinematic atmosphere.`;
+
+  // Attempt Google Imagen 3 generation if aiClient is active
+  if (aiClient) {
+    try {
+      const imagenAspect = aspectRatio === '16:9' ? '16:9' : aspectRatio === '3:4' ? '3:4' : '3:4';
+      const imgRes = await (aiClient.models as any).generateImages({
+        model: 'imagen-3.0-generate-002',
+        prompt: masterPrompt,
+        config: {
+          numberOfImages: 1,
+          aspectRatio: imagenAspect,
+          personGeneration: 'ALLOW_ADULT',
+        },
+      });
+
+      if (imgRes && imgRes.generatedImages && imgRes.generatedImages.length > 0) {
+        const b64 = imgRes.generatedImages[0].image.imageBytes;
+        const dataUrl = `data:image/png;base64,${b64}`;
+        return res.json({
+          success: true,
+          poster: {
+            id: `poster-${Date.now()}`,
+            title: cleanTitle,
+            tagline: finalTagline,
+            theme: cleanTheme,
+            aspectRatio,
+            billingCast: cleanCast,
+            directorCredit: cleanDirector,
+            releaseDate: cleanRelease,
+            lightingStyle,
+            imageUrl: dataUrl,
+            prompt: masterPrompt,
+            model: 'imagen-3.0-generate-002',
+            accentColor: '#00f0ff',
+            createdDate: new Date().toISOString(),
+          },
+        });
+      }
+    } catch (err: any) {
+      console.warn('Imagen 3 poster generation error, using curated high-fidelity cinematic vector engine:', err?.message || err);
+    }
+  }
+
+  // Curated High-Definition Cinematic SVG Movie Poster
+  const svg = generateCinematicPosterSvg({
+    title: cleanTitle,
+    tagline: finalTagline,
+    theme: cleanTheme,
+    aspectRatio: aspectRatio as '2:3' | '3:4' | '16:9',
+    billingCast: cleanCast,
+    directorCredit: cleanDirector,
+    releaseDate: cleanRelease,
+    lightingStyle,
+  });
+
+  const dataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+
+  res.json({
+    success: true,
+    poster: {
+      id: `poster-${Date.now()}`,
+      title: cleanTitle,
+      tagline: finalTagline,
+      theme: cleanTheme,
+      aspectRatio,
+      billingCast: cleanCast,
+      directorCredit: cleanDirector,
+      releaseDate: cleanRelease,
+      lightingStyle,
+      imageUrl: dataUrl,
+      prompt: masterPrompt,
+      model: 'imagen-3.0-generate-002 (Curated Cinema Engine)',
+      accentColor: getPosterThemeAssets(cleanTheme).accentColor,
+      createdDate: new Date().toISOString(),
+    },
+  });
+});
+
+// API: Suggest movie poster taglines based on story title and theme
+app.post('/api/poster/suggest-tagline', async (req: Request, res: Response) => {
+  const { title = 'Untitled', theme = 'Cinematic' } = req.body;
+  if (aiClient) {
+    try {
+      const response = await aiClient.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: `Generate 3 short, dramatic, highly cinematic movie poster taglines for a film titled "${title}" with genre/theme "${theme}". Return only 3 lines, one per tagline, no numbers, no quotation marks.`,
+      });
+      const lines =
+        response.text
+          ?.split('\n')
+          .map((l) => l.trim().replace(/^[-*•\d\.\s"']+|["']$/g, ''))
+          .filter((l) => l.length > 5)
+          .slice(0, 3) || [];
+      if (lines.length > 0) {
+        return res.json({ success: true, taglines: lines });
+      }
+    } catch (e: any) {
+      console.warn('Tagline suggestion error:', e?.message || e);
+    }
+  }
+
+  res.json({
+    success: true,
+    taglines: [
+      `In a world of synthetic light, the dark remembers everything.`,
+      `The code was broken. Now the reckoning begins.`,
+      `Beyond the firewall of reality lies what they tried to erase.`,
+    ],
+  });
+});
+
 
 // API: Master Export compilation endpoint for seamless video download
 app.post('/api/export-master', (req: Request, res: Response) => {
@@ -1066,7 +1634,7 @@ async function startServer() {
   } else {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { middlewareMode: true, hmr: false },
       appType: 'spa',
     });
     app.use(vite.middlewares);

@@ -21,6 +21,9 @@ import {
   Link,
   Check,
   Mic,
+  Camera,
+  Calendar,
+  Aperture,
 } from 'lucide-react';
 import { Scene, AspectRatio, TransitionEffect } from '../types';
 import { renderCinematicFrame } from '../utils/canvasRenderer';
@@ -43,6 +46,7 @@ interface VideoPlayerProps {
   setUseLiveVideoPreview?: (val: boolean) => void;
   onUpdateSceneVideoUrl?: (sceneId: string, videoUrl: string) => void;
   onUpdateAllVideoUrls?: (videoUrl: string) => void;
+  onOpenSceneMetadata?: (sceneId: string) => void;
 }
 
 export const VideoPlayer: React.FC<VideoPlayerProps> = ({
@@ -61,11 +65,13 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   setUseLiveVideoPreview,
   onUpdateSceneVideoUrl,
   onUpdateAllVideoUrls,
+  onOpenSceneMetadata,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [showSubtitles, setShowSubtitles] = useState(true);
+  const [showMetadataOverlay, setShowMetadataOverlay] = useState(true);
   const [isLooping, setIsLooping] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(0.85);
@@ -255,44 +261,53 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   };
 
+  const currentTimeRef = useRef(currentTime);
   useEffect(() => {
-    let interval: any;
+    currentTimeRef.current = currentTime;
+  }, [currentTime]);
+
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval> | undefined;
     if (isPlaying) {
       const step = 0.05; // 50ms interval for ultra-smooth scrub
       interval = setInterval(() => {
-        setCurrentTime((prev) => {
-          const next = prev + step;
-          if (next >= totalDuration) {
-            if (isLooping) {
-              setCurrentSceneIndex(0);
-              playSceneAudio(scenes[0]);
-              return 0;
-            } else {
-              setIsPlaying(false);
-              return totalDuration;
-            }
+        const next = currentTimeRef.current + step;
+        if (next >= totalDuration) {
+          if (isLooping) {
+            currentTimeRef.current = 0;
+            setCurrentTime(0);
+            setCurrentSceneIndex(0);
+            playSceneAudio(scenes[0]);
+          } else {
+            currentTimeRef.current = totalDuration;
+            setCurrentTime(totalDuration);
+            setIsPlaying(false);
           }
+          return;
+        }
 
-          // Check if we advanced into the next scene
-          const foundIdx = scenes.findIndex((s) => next >= s.startTime && next < s.endTime);
-          if (foundIdx !== -1 && foundIdx !== currentSceneIndex) {
-            setCurrentSceneIndex(foundIdx);
-            // Trigger narration or recorded voice for the new scene
-            const newScene = scenes[foundIdx];
-            playSceneAudio(newScene);
-          }
+        currentTimeRef.current = next;
+        setCurrentTime(next);
 
-          // Evaluate automated audio ducking at the current timeline timestamp
-          audioEngine.updateDuckingAtTime(next);
+        // Check if we advanced into the next scene
+        const foundIdx = scenes.findIndex((s) => next >= s.startTime && next < s.endTime);
+        if (foundIdx !== -1 && foundIdx !== currentSceneIndex) {
+          setCurrentSceneIndex(foundIdx);
+          // Trigger narration or recorded voice for the new scene
+          const newScene = scenes[foundIdx];
+          playSceneAudio(newScene);
+        }
 
-          return next;
-        });
+        // Evaluate automated audio ducking at the current timeline timestamp
+        audioEngine.updateDuckingAtTime(next);
       }, 50);
     } else {
       audioEngine.stopNarration();
     }
 
-    return () => clearInterval(interval);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [
     isPlaying,
     totalDuration,
@@ -752,6 +767,48 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 </span>
               </div>
             )}
+
+            {/* Small Overlay on Video Player for Scene Metadata (Date, Lens Focal Length, Aperture) */}
+            {showMetadataOverlay && activeScene && activeScene.metadata?.showOverlay !== false && testingTransitionEffect === null && (
+              <div
+                onClick={() => onOpenSceneMetadata && onOpenSceneMetadata(activeScene.id)}
+                className="absolute bottom-4 left-4 bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-lg border border-amber-500/40 text-[11px] font-mono text-zinc-200 flex items-center gap-2.5 shadow-xl hover:border-amber-400 hover:bg-black/90 transition-all cursor-pointer group/slate z-10 select-none"
+                title="Scene Metadata Slate: Click to attach or edit shooting date, lens focal length, and aperture"
+              >
+                <div className="flex items-center gap-1.5 text-amber-300 font-semibold">
+                  <Aperture className="w-3.5 h-3.5 text-amber-400 group-hover/slate:rotate-45 transition-transform" />
+                  <span>{activeScene.metadata?.lensFocalLength || '35mm Anamorphic'}</span>
+                  <span className="px-1.5 py-0.2 rounded bg-amber-950/80 border border-amber-500/40 text-[10px] text-amber-300 font-bold">
+                    {activeScene.metadata?.cameraAperture || 'T1.5'}
+                  </span>
+                </div>
+
+                <span className="text-zinc-600">|</span>
+
+                <div className="flex items-center gap-1 text-zinc-300">
+                  <Calendar className="w-3 h-3 text-cyan-400" />
+                  <span>{activeScene.metadata?.shootingDate || '2026-10-12'}</span>
+                </div>
+
+                {activeScene.metadata?.cameraModel && (
+                  <>
+                    <span className="text-zinc-600 hidden sm:inline">|</span>
+                    <span className="text-zinc-400 text-[10px] hidden sm:inline">{activeScene.metadata.cameraModel}</span>
+                  </>
+                )}
+
+                {activeScene.metadata?.iso && (
+                  <>
+                    <span className="text-zinc-600 hidden md:inline">|</span>
+                    <span className="text-amber-400 text-[10px] hidden md:inline">{activeScene.metadata.iso}</span>
+                  </>
+                )}
+
+                <span className="text-[10px] text-amber-400/80 group-hover/slate:text-amber-300 opacity-70 group-hover/slate:opacity-100 transition-opacity ml-0.5">
+                  ✎ Slate
+                </span>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -866,6 +923,26 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             >
               <Subtitles className="w-3.5 h-3.5" />
               <span className="text-[10px] font-mono hidden sm:inline">CC</span>
+            </button>
+
+            {/* Scene Metadata Slate Overlay Button */}
+            <button
+              onClick={() => {
+                if (onOpenSceneMetadata && activeScene) {
+                  onOpenSceneMetadata(activeScene.id);
+                } else {
+                  setShowMetadataOverlay(!showMetadataOverlay);
+                }
+              }}
+              className={`p-1.5 rounded-md border text-xs transition-colors cursor-pointer flex items-center gap-1 ${
+                showMetadataOverlay
+                  ? 'border-amber-500/40 text-amber-300 bg-amber-950/20'
+                  : 'border-zinc-800 text-zinc-500'
+              }`}
+              title="Scene Metadata Slate (Shooting Date, Lens Focal Length, Aperture)"
+            >
+              <Camera className="w-3.5 h-3.5" />
+              <span className="text-[10px] font-mono hidden sm:inline">Slate</span>
             </button>
 
             <button

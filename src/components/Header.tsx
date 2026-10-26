@@ -16,6 +16,7 @@ import {
   ChevronDown,
   ShieldCheck,
   RotateCcw,
+  Palette,
 } from 'lucide-react';
 import { User } from 'firebase/auth';
 import { PRESET_STORIES } from '../data/presets';
@@ -35,6 +36,11 @@ interface HeaderProps {
   onOpenGmail?: () => void;
   onOpenBackgroundGenerator?: () => void;
   onOpenVoiceRecorder?: () => void;
+  onOpenPosterGenerator?: () => void;
+  onOpenSoundtrackStudio?: () => void;
+  onOpenCostumeLock?: () => void;
+  onOpenCinematicGallery?: () => void;
+  onRelaunchCanvas?: () => void;
   currentUser?: User | null;
   onSignInGoogle?: () => void;
   onSignOutGoogle?: () => void;
@@ -55,6 +61,11 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenGmail,
   onOpenBackgroundGenerator,
   onOpenVoiceRecorder,
+  onOpenPosterGenerator,
+  onOpenSoundtrackStudio,
+  onOpenCostumeLock,
+  onOpenCinematicGallery,
+  onRelaunchCanvas,
   currentUser,
   onSignInGoogle,
   onSignOutGoogle,
@@ -100,7 +111,17 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
             <div className="text-[10px] text-zinc-400 font-mono flex items-center gap-2">
               <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              Engine v3.4 Ready
+              <span>Engine v3.4 Ready</span>
+              {onRelaunchCanvas && (
+                <button
+                  onClick={onRelaunchCanvas}
+                  title="Re-launch & refresh interactive app canvas stage"
+                  className="text-cyan-400 hover:text-cyan-300 underline decoration-cyan-500/40 flex items-center gap-0.5 cursor-pointer ml-1"
+                >
+                  <RotateCcw className="w-2.5 h-2.5" />
+                  <span>Relaunch</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -159,6 +180,54 @@ export const Header: React.FC<HeaderProps> = ({
             </>
           )}
         </div>
+
+        {/* Afrobeat & Custom Soundtrack Multi-Track Studio Button */}
+        {onOpenSoundtrackStudio && (
+          <button
+            onClick={onOpenSoundtrackStudio}
+            title="Afrobeat & Custom Soundtrack Studio - Multi-track mixer (Voiceover, Afrobeat Score & Ambient SFX)"
+            className="px-3 py-1.5 rounded-lg bg-[#0e121d] hover:bg-amber-950/30 text-amber-300 hover:text-amber-200 border border-amber-500/40 hover:border-amber-400 text-xs font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_12px_rgba(245,158,11,0.2)]"
+          >
+            <Music className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden md:inline">Afrobeat & Score</span>
+          </button>
+        )}
+
+        {/* Storyboard Continuity & Costume Locks Button */}
+        {onOpenCostumeLock && (
+          <button
+            onClick={onOpenCostumeLock}
+            title="Storyboard Continuity & Costume Locks - Keep character outfits and keyframes consistent across scenes"
+            className="px-3 py-1.5 rounded-lg bg-[#0e121d] hover:bg-emerald-950/30 text-emerald-300 hover:text-emerald-200 border border-emerald-500/40 hover:border-emerald-400 text-xs font-mono font-medium flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_12px_rgba(16,185,129,0.18)]"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="hidden md:inline">Costume Locks</span>
+          </button>
+        )}
+
+        {/* Cinematic Preset Gallery - Color Grading Filters Button */}
+        {onOpenCinematicGallery && (
+          <button
+            onClick={onOpenCinematicGallery}
+            title="Cinematic Preset Gallery - Apply color grading LUT filters (Noir, Technicolor, Retro, Desaturated)"
+            className="px-3 py-1.5 rounded-lg bg-[#0e121d] hover:bg-fuchsia-950/30 text-fuchsia-300 hover:text-fuchsia-200 border border-fuchsia-500/40 hover:border-fuchsia-400 text-xs font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_12px_rgba(217,70,239,0.2)]"
+          >
+            <Palette className="w-3.5 h-3.5 text-fuchsia-400" />
+            <span className="hidden md:inline">Color Presets</span>
+          </button>
+        )}
+
+        {/* Generate Poster - Cinematic Movie Poster Studio Button */}
+        {onOpenPosterGenerator && (
+          <button
+            onClick={onOpenPosterGenerator}
+            title="Generate Cinematic Movie Poster based on Story Title & Theme"
+            className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500/20 via-cyan-500/20 to-purple-500/20 hover:from-amber-500/30 hover:to-cyan-500/30 text-amber-300 hover:text-amber-200 border border-amber-500/40 hover:border-amber-400 text-xs font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_14px_rgba(245,158,11,0.25)]"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+            <span>Generate Poster</span>
+          </button>
+        )}
 
         {/* AI Background Studio / Image Generation Button */}
         {onOpenBackgroundGenerator && (

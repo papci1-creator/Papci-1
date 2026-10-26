@@ -18,10 +18,14 @@ import { CostumeLockModal } from './components/CostumeLockModal';
 import { GmailModal } from './components/GmailModal';
 import { BackgroundGeneratorModal } from './components/BackgroundGeneratorModal';
 import { VoiceRecorderModal } from './components/VoiceRecorderModal';
+import { SceneMetadataModal } from './components/SceneMetadataModal';
+import { PosterGeneratorModal } from './components/PosterGeneratorModal';
+import { SoundtrackStudioModal } from './components/SoundtrackStudioModal';
+import { CinematicPresetGalleryModal } from './components/CinematicPresetGalleryModal';
 import { InstallPromptBanner } from './components/InstallPromptBanner';
 import { User } from 'firebase/auth';
 import { initAuth, signInWithGoogle, signOutGoogle } from './services/firebaseAuth';
-import { Scene, AspectRatio, PresetStory, CharacterProfile, TransitionEffect } from './types';
+import { Scene, AspectRatio, PresetStory, CharacterProfile, TransitionEffect, SoundtrackMixConfig } from './types';
 import { PRESET_STORIES, VISUAL_STYLES, VIDEO_GENERATORS, VOICE_ACTORS, MUSIC_STYLES, SAMPLE_VIDEO_CLIPS, DEFAULT_CHARACTERS } from './data/presets';
 import { LEO_PORTRAIT, MALAKOR_PORTRAIT } from './data/characterAssets';
 import { BG_CYBERPUNK_METROPOLIS, BG_QUANTUM_VAULT } from './data/backgroundAssets';
@@ -59,7 +63,29 @@ export default function App() {
   const [isBackgroundGeneratorOpen, setIsBackgroundGeneratorOpen] = useState(false);
   const [isVoiceRecorderOpen, setIsVoiceRecorderOpen] = useState(false);
   const [voiceRecorderTargetSceneId, setVoiceRecorderTargetSceneId] = useState<string | undefined>(undefined);
+  const [isSceneMetadataOpen, setIsSceneMetadataOpen] = useState(false);
+  const [sceneMetadataTargetSceneId, setSceneMetadataTargetSceneId] = useState<string | undefined>(undefined);
+  const [isPosterGeneratorOpen, setIsPosterGeneratorOpen] = useState(false);
+  const [isSoundtrackStudioOpen, setIsSoundtrackStudioOpen] = useState(false);
+  const [isCinematicGalleryOpen, setIsCinematicGalleryOpen] = useState(false);
+  const [cinematicGalleryTargetSceneId, setCinematicGalleryTargetSceneId] = useState<string | undefined>(undefined);
+  const [projectCoverPoster, setProjectCoverPoster] = useState<string | null>(null);
   const [useLiveVideoPreview, setUseLiveVideoPreview] = useState(true);
+  const [canvasKey, setCanvasKey] = useState(0);
+
+  // Multi-Track Afrobeat & Custom Soundtrack Mix Configuration
+  const [soundtrackMix, setSoundtrackMix] = useState<SoundtrackMixConfig>({
+    musicStyle: 'Afrobeat Groove',
+    musicVolume: 0.35,
+    voiceoverVolume: 1.0,
+    ambientSfxStyle: 'Neon Rain & Thunder',
+    ambientSfxVolume: 0.28,
+    afrobeatBpm: 108,
+    percussionIntensity: 0.85,
+    logDrumBassBoost: 0.80,
+    enableDucking: true,
+    duckingDepth: 0.22,
+  });
 
   // Characters & Reference Manager State
   const [characters, setCharacters] = useState<CharacterProfile[]>(DEFAULT_CHARACTERS);
@@ -98,6 +124,20 @@ export default function App() {
       outfitId: 'outfit-leo-1',
       outfitName: 'Astronaut Spacesuit',
       outfitDescription: 'Matte white pressurized EVA spacesuit with cobalt-blue accents, gold-tinted reflective visor, and cyan life-support conduits.',
+      metadata: {
+        shootingDate: '2026-10-12',
+        lensFocalLength: '35mm Anamorphic',
+        cameraAperture: 'T1.5',
+        iso: 'ISO 1600',
+        shutterSpeed: '1/48s (180°)',
+        cameraModel: 'ARRI Alexa 35',
+        whiteBalance: '5600K',
+        location: 'Neo-Tokyo Sublevel 4',
+        takeNumber: 1,
+        rollNumber: 'A001',
+        notes: 'Volumetric cyan haze, wet reflective pavement',
+        showOverlay: true,
+      },
       status: 'ready',
       progress: 100,
       generationPhase: 'Render Ready (100%)',
@@ -138,6 +178,20 @@ export default function App() {
       outfitId: 'outfit-leo-1',
       outfitName: 'Astronaut Spacesuit',
       outfitDescription: 'Matte white pressurized EVA spacesuit with cobalt-blue accents, gold-tinted reflective visor, and cyan life-support conduits.',
+      metadata: {
+        shootingDate: '2026-10-12',
+        lensFocalLength: '85mm Macro Prime',
+        cameraAperture: 'T2.0',
+        iso: 'ISO 800',
+        shutterSpeed: '1/48s (180°)',
+        cameraModel: 'ARRI Alexa 35',
+        whiteBalance: '4300K',
+        location: 'Archive Quantum Vault',
+        takeNumber: 3,
+        rollNumber: 'A001',
+        notes: 'Extreme close up on glowing neural filaments',
+        showOverlay: true,
+      },
       status: 'ready',
       progress: 100,
       generationPhase: 'Render Ready (100%)',
@@ -178,6 +232,20 @@ export default function App() {
       outfitId: 'outfit-malakor-1',
       outfitName: 'Obsidian High-Collar Trench',
       outfitDescription: 'Heavy armored obsidian trench coat with amber illuminated silk lining, gilded shoulder epaulets, and titanium double-breasted clasps.',
+      metadata: {
+        shootingDate: '2026-10-13',
+        lensFocalLength: '24mm Wide Anamorphic',
+        cameraAperture: 'T1.8',
+        iso: 'ISO 1250',
+        shutterSpeed: '1/96s (90°)',
+        cameraModel: 'RED V-Raptor 8K',
+        whiteBalance: '5600K',
+        location: 'Megastructure Catwalks',
+        takeNumber: 2,
+        rollNumber: 'B002',
+        notes: 'Dynamic drone tracking, red laser flare',
+        showOverlay: true,
+      },
       status: 'ready',
       progress: 100,
       generationPhase: 'Render Ready (100%)',
@@ -741,9 +809,24 @@ export default function App() {
         onOpenGoogleForms={() => setIsGoogleFormsOpen(true)}
         onOpenGmail={() => setIsGmailOpen(true)}
         onOpenBackgroundGenerator={() => setIsBackgroundGeneratorOpen(true)}
+        onOpenPosterGenerator={() => setIsPosterGeneratorOpen(true)}
         onOpenVoiceRecorder={() => {
           setVoiceRecorderTargetSceneId(scenes[currentSceneIndex]?.id);
           setIsVoiceRecorderOpen(true);
+        }}
+        onOpenSoundtrackStudio={() => setIsSoundtrackStudioOpen(true)}
+        onOpenCostumeLock={() => setIsCostumeLockOpen(true)}
+        onOpenCinematicGallery={() => {
+          setCinematicGalleryTargetSceneId(scenes[currentSceneIndex]?.id);
+          setIsCinematicGalleryOpen(true);
+        }}
+        onRelaunchCanvas={() => {
+          setIsPlaying(false);
+          audioEngine.stopMusic();
+          audioEngine.stopAmbientSfx();
+          setCurrentTime(0);
+          setCurrentSceneIndex(0);
+          setCanvasKey((prev) => prev + 1);
         }}
         currentUser={currentUser}
         onSignInGoogle={handleGoogleSignIn}
@@ -791,7 +874,7 @@ export default function App() {
         {/* Right Column: Media Engine (Video Player + Interactive Timeline) */}
         <div className="flex-1 flex flex-col h-1/2 lg:h-full bg-[#07090e] overflow-hidden">
           {/* Top Half of Right Column: Large Cinematic Video Player Canvas */}
-          <div className="flex-1 min-h-[300px] overflow-hidden">
+          <div className="flex-1 min-h-[300px] overflow-hidden" key={canvasKey}>
             <VideoPlayer
               scenes={scenes}
               currentSceneIndex={currentSceneIndex}
@@ -811,6 +894,16 @@ export default function App() {
               }}
               onUpdateAllVideoUrls={(videoUrl) => {
                 setScenes((prev) => prev.map((s) => ({ ...s, videoUrl })));
+              }}
+              onOpenSceneMetadata={(sceneId) => {
+                if (sceneId) {
+                  const idx = scenes.findIndex((s) => s.id === sceneId);
+                  if (idx !== -1) setCurrentSceneIndex(idx);
+                  setSceneMetadataTargetSceneId(sceneId);
+                } else {
+                  setSceneMetadataTargetSceneId(scenes[currentSceneIndex]?.id);
+                }
+                setIsSceneMetadataOpen(true);
               }}
             />
           </div>
@@ -856,6 +949,26 @@ export default function App() {
                 }
                 setIsVoiceRecorderOpen(true);
               }}
+              onOpenSceneMetadata={(sceneId) => {
+                if (sceneId) {
+                  const idx = scenes.findIndex((s) => s.id === sceneId);
+                  if (idx !== -1) setCurrentSceneIndex(idx);
+                  setSceneMetadataTargetSceneId(sceneId);
+                } else {
+                  setSceneMetadataTargetSceneId(scenes[currentSceneIndex]?.id);
+                }
+                setIsSceneMetadataOpen(true);
+              }}
+              onOpenCinematicGallery={(sceneId) => {
+                if (sceneId) {
+                  const idx = scenes.findIndex((s) => s.id === sceneId);
+                  if (idx !== -1) setCurrentSceneIndex(idx);
+                  setCinematicGalleryTargetSceneId(sceneId);
+                } else {
+                  setCinematicGalleryTargetSceneId(scenes[currentSceneIndex]?.id);
+                }
+                setIsCinematicGalleryOpen(true);
+              }}
             />
           </div>
         </div>
@@ -870,6 +983,11 @@ export default function App() {
         musicStyle={musicStyle}
         projectTitle={projectTitle}
         onOpenGmail={() => setIsGmailOpen(true)}
+        soundtrackMix={soundtrackMix}
+        onOpenSoundtrackStudio={() => {
+          setIsExportModalOpen(false);
+          setIsSoundtrackStudioOpen(true);
+        }}
       />
 
       {/* 4. Settings & API Environment Configuration Modal */}
@@ -942,10 +1060,14 @@ export default function App() {
         onUpdateCharacter={(id, updates) => {
           setCharacters((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c)));
         }}
-        onApplyCostumeLockToScenes={(charId, lock) => {
+        onApplyCostumeLockToScenes={(charId, lock, outfitId) => {
+          const targetChar = characters.find((c) => c.id === charId);
+          const chosenOutfit =
+            targetChar?.outfits.find((o) => o.id === (outfitId || targetChar.activeOutfitId)) ||
+            targetChar?.outfits[0];
           setScenes((prev) =>
             prev.map((s) => {
-              if (s.characterId === charId || s.characterName === characters.find((c) => c.id === charId)?.name) {
+              if (s.characterId === charId || s.characterName === targetChar?.name) {
                 const currentPrompt = s.videoPrompt;
                 const hasExistingLock = currentPrompt.includes('[COSTUME LOCK:');
                 let updatedPrompt = currentPrompt;
@@ -957,10 +1079,46 @@ export default function App() {
                 return {
                   ...s,
                   costumeLock: lock,
+                  visualKeyframeLocked: true,
+                  keyframeAnchorPrompt: chosenOutfit?.description || lock,
+                  outfitId: chosenOutfit?.id || s.outfitId,
+                  outfitName: chosenOutfit?.name || s.outfitName,
+                  outfitImage: chosenOutfit?.imageUrl || s.outfitImage,
+                  characterAvatar: targetChar?.imageUrl || s.characterAvatar,
                   videoPrompt: updatedPrompt,
                 };
               }
               return s;
+            })
+          );
+        }}
+        onLockAllScenesContinuity={() => {
+          setScenes((prev) =>
+            prev.map((s) => {
+              const targetChar =
+                characters.find((c) => c.id === s.characterId || c.name === s.characterName) ||
+                characters[0];
+              const chosenOutfit =
+                targetChar?.outfits.find((o) => o.id === (s.outfitId || targetChar.activeOutfitId)) ||
+                targetChar?.outfits[0];
+              const lockString =
+                targetChar?.costumeLock ||
+                `[COSTUME LOCK: ${chosenOutfit?.description || targetChar?.description || 'Signature Cinematic Wardrobe'} | Zero wardrobe drift]`;
+              const currentPrompt = s.videoPrompt;
+              const updatedPrompt = currentPrompt.includes('[COSTUME LOCK:')
+                ? currentPrompt.replace(/\[COSTUME LOCK:[^\]]+\]/g, lockString)
+                : `${lockString} ${currentPrompt}`;
+              return {
+                ...s,
+                costumeLock: lockString,
+                visualKeyframeLocked: true,
+                keyframeAnchorPrompt: chosenOutfit?.description || lockString,
+                outfitId: chosenOutfit?.id || s.outfitId,
+                outfitName: chosenOutfit?.name || s.outfitName,
+                outfitImage: chosenOutfit?.imageUrl || s.outfitImage,
+                characterAvatar: targetChar?.imageUrl || s.characterAvatar,
+                videoPrompt: updatedPrompt,
+              };
             })
           );
         }}
@@ -993,6 +1151,62 @@ export default function App() {
         initialSceneId={voiceRecorderTargetSceneId}
         onSaveRecording={handleSaveVoiceRecording}
         onClearRecording={handleClearVoiceRecording}
+      />
+
+      {/* 13. Scene Production Metadata Slate Modal */}
+      <SceneMetadataModal
+        isOpen={isSceneMetadataOpen}
+        onClose={() => setIsSceneMetadataOpen(false)}
+        scene={scenes.find((s) => s.id === sceneMetadataTargetSceneId) || scenes[currentSceneIndex] || scenes[0]}
+        scenes={scenes}
+        onUpdateScene={handleUpdateScene}
+        onBulkUpdateScenes={handleBulkUpdateScenes}
+        onSelectScene={(sceneId) => {
+          setSceneMetadataTargetSceneId(sceneId);
+          const idx = scenes.findIndex((s) => s.id === sceneId);
+          if (idx !== -1) setCurrentSceneIndex(idx);
+        }}
+      />
+
+      {/* 14. Cinematic Movie Poster Studio Modal */}
+      <PosterGeneratorModal
+        isOpen={isPosterGeneratorOpen}
+        onClose={() => setIsPosterGeneratorOpen(false)}
+        projectTitle={projectTitle}
+        projectTheme={visualStyle}
+        characters={characters}
+        onSetProjectCover={(posterUrl) => {
+          setProjectCoverPoster(posterUrl);
+        }}
+      />
+
+      {/* 15. Afrobeat & Multi-Track Soundtrack Studio Modal */}
+      <SoundtrackStudioModal
+        isOpen={isSoundtrackStudioOpen}
+        onClose={() => setIsSoundtrackStudioOpen(false)}
+        mixConfig={soundtrackMix}
+        onUpdateMixConfig={(updates) => {
+          setSoundtrackMix((prev) => ({ ...prev, ...updates }));
+          if (updates.musicStyle) setMusicStyle(updates.musicStyle);
+          if (updates.musicVolume !== undefined) setMusicVolume(updates.musicVolume);
+        }}
+        scenes={scenes}
+      />
+
+      {/* 16. Cinematic Preset Gallery - Color Grading Filters Modal */}
+      <CinematicPresetGalleryModal
+        isOpen={isCinematicGalleryOpen}
+        onClose={() => setIsCinematicGalleryOpen(false)}
+        scenes={scenes}
+        currentSceneIndex={currentSceneIndex}
+        initialSceneId={cinematicGalleryTargetSceneId}
+        onUpdateScene={handleUpdateScene}
+        onBulkUpdateScenes={handleBulkUpdateScenes}
+        onSelectScene={(sceneId) => {
+          setCinematicGalleryTargetSceneId(sceneId);
+          const idx = scenes.findIndex((s) => s.id === sceneId);
+          if (idx !== -1) setCurrentSceneIndex(idx);
+        }}
       />
     </div>
   );

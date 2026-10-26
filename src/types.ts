@@ -90,11 +90,77 @@ export interface Scene {
   backgroundAssetId?: string; // ID of chosen background asset from catalog
   backgroundPrompt?: string; // User prompt or descriptive specs for the background
   backgroundStyle?: string; // Visual style of background
+  visualKeyframeLocked?: boolean; // Whether visual keyframe & outfit continuity is locked across cuts
+  keyframeAnchorPrompt?: string; // Locked keyframe anchor prompt for scene-to-scene visual consistency
+  colorGradePreset?: CinematicGradePresetId; // Selected LUT color grading preset (e.g. 'Noir', 'Technicolor', 'Retro', 'Desaturated')
+  colorGradeIntensity?: number; // 0 to 100 blend strength of the color grade filter (default 100)
+  metadata?: SceneMetadata;
   status: 'queued' | 'rendering' | 'ready' | 'error';
   progress: number;
   generationPhase: string;
   visualTheme: VisualTheme;
   seed: number;
+}
+
+export type CinematicGradePresetId =
+  | 'None'
+  | 'Noir'
+  | 'Technicolor'
+  | 'Retro'
+  | 'Desaturated'
+  | 'TealAndOrange'
+  | 'CyberNeon'
+  | 'GoldenHour'
+  | 'SepiaArchival'
+  | 'MatrixGreen';
+
+export interface CinematicGradePreset {
+  id: CinematicGradePresetId;
+  name: string;
+  subtitle: string;
+  category: 'Classic Film' | 'Modern Cinema' | 'Stylized & Retro';
+  description: string;
+  filmStockRef: string;
+  accentColor: string;
+  swatchColors: [string, string, string];
+  // Optical & color parameters
+  contrast: number; // 50 to 150
+  saturation: number; // 0 to 200
+  sepia: number; // 0 to 100
+  hueRotate: number; // -180 to 180 deg
+  bloomIntensity: number; // 0 to 100
+  filmGrain: number; // 0 to 100
+  chromaticAberration: number; // 0 to 100
+  vignetteIntensity: number; // 0 to 100
+  tintOverlay: string; // rgba color wash
+  shadowTint?: string; // split-tone shadow color
+  highlightTint?: string; // split-tone highlight color
+}
+
+export interface SceneMetadata {
+  shootingDate: string;
+  lensFocalLength: string;
+  cameraAperture: string;
+  shutterSpeed?: string;
+  iso?: string;
+  cameraModel?: string;
+  whiteBalance?: string;
+  filter?: string;
+  location?: string;
+  takeNumber?: number;
+  rollNumber?: string;
+  notes?: string;
+  showOverlay?: boolean;
+  // Visual Effect Intensity Sliders for per-clip fine-tuning
+  bloomIntensity?: number; // 0 to 100 (default 35)
+  filmGrain?: number; // 0 to 100 (default 20)
+  contrast?: number; // 50 to 150 (default 105)
+  saturation?: number; // 0 to 200 (default 110)
+  chromaticAberration?: number; // 0 to 100 (default 15)
+  vignetteIntensity?: number; // 0 to 100 (default 45)
+  sepia?: number; // 0 to 100 (default 0)
+  hueRotate?: number; // -180 to 180 (default 0)
+  colorTint?: string; // optional rgba tint wash
 }
 
 export interface BackgroundAsset {
@@ -163,4 +229,38 @@ export interface MasterExportConfig {
   includeSubtitles: boolean;
   aspectRatio: AspectRatio;
 }
+
+export interface SoundtrackMixConfig {
+  musicStyle: string;
+  musicVolume: number;
+  voiceoverVolume: number;
+  ambientSfxStyle: string;
+  ambientSfxVolume: number;
+  afrobeatBpm: number;
+  percussionIntensity: number;
+  logDrumBassBoost: number;
+  enableDucking: boolean;
+  duckingDepth: number;
+  customAudioUrl?: string | null;
+  customAudioName?: string | null;
+}
+
+export interface MoviePosterData {
+  id: string;
+  title: string;
+  tagline: string;
+  theme: string;
+  aspectRatio: '2:3' | '3:4' | '16:9';
+  billingCast: string;
+  directorCredit: string;
+  releaseDate: string;
+  lightingStyle: string;
+  imageUrl: string;
+  prompt: string;
+  model: string;
+  accentColor: string;
+  createdDate: string;
+}
+
+
 

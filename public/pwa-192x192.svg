@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <defs>
+    <radialGradient id="bg192" cx="50%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#030712"/>
+    </radialGradient>
+    <linearGradient id="cyan192" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="50%" stop-color="#00f0ff"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </linearGradient>
+    <linearGradient id="amber192" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fde047"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </linearGradient>
+  </defs>
+  <rect width="192" height="192" rx="42" fill="url(#bg192)"/>
+  <rect width="188" height="188" x="2" y="2" rx="40" fill="none" stroke="url(#cyan192)" stroke-width="2" stroke-opacity="0.4"/>
+  <g transform="translate(36, 40) scale(0.375)">
+    <rect x="0" y="100" width="320" height="210" rx="24" fill="#090d16" stroke="#00f0ff" stroke-width="6"/>
+    <g transform="rotate(-12, 10, 80)">
+      <rect x="0" y="30" width="320" height="56" rx="12" fill="#0c1322" stroke="url(#cyan192)" stroke-width="5"/>
+      <polygon points="40,32 75,32 45,84 10,84" fill="url(#cyan192)"/>
+      <polygon points="110,32 145,32 115,84 80,84" fill="url(#cyan192)"/>
+      <polygon points="180,32 215,32 185,84 150,84" fill="url(#cyan192)"/>
+      <polygon points="250,32 285,32 255,84 220,84" fill="url(#amber192)"/>
+    </g>
+    <circle cx="160" cy="205" r="54" fill="#030712" stroke="url(#cyan192)" stroke-width="4" stroke-dasharray="6,4"/>
+    <polygon points="146,180 188,205 146,230" fill="url(#amber192)"/>
+  </g>
+</svg>

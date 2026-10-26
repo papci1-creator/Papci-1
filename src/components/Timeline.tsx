@@ -39,6 +39,9 @@ import {
   EyeOff,
   MoveHorizontal,
   Image as ImageIcon,
+  Aperture,
+  Calendar,
+  Palette,
 } from 'lucide-react';
 import { Scene, TransitionEffect, CharacterProfile, TimeOfDay } from '../types';
 import { renderCinematicFrame } from '../utils/canvasRenderer';
@@ -68,6 +71,8 @@ interface TimelineProps {
   onOpenCostumeLock?: () => void;
   onOpenBackgroundGenerator?: (sceneId?: string) => void;
   onOpenVoiceRecorder?: (sceneId?: string) => void;
+  onOpenSceneMetadata?: (sceneId?: string) => void;
+  onOpenCinematicGallery?: (sceneId?: string) => void;
 }
 
 export const TIME_OF_DAY_OPTIONS: {
@@ -243,6 +248,13 @@ const MovingSceneThumbnail: React.FC<{ scene: Scene; isSelected: boolean }> = ({
         MOVING
       </div>
 
+      {/* Active Color Grade LUT Badge */}
+      {scene.colorGradePreset && scene.colorGradePreset !== 'None' && (
+        <div className="absolute top-1.5 right-1.5 bg-fuchsia-950/85 border border-fuchsia-500/50 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold text-fuchsia-300 uppercase">
+          LUT: {scene.colorGradePreset}
+        </div>
+      )}
+
       <div className="absolute bottom-1.5 right-1.5 bg-black/80 px-1.5 py-0.5 rounded text-[10px] font-mono text-zinc-300">
         {scene.duration}s
       </div>
@@ -271,6 +283,8 @@ export const Timeline: React.FC<TimelineProps> = ({
   onOpenCostumeLock,
   onOpenBackgroundGenerator,
   onOpenVoiceRecorder,
+  onOpenSceneMetadata,
+  onOpenCinematicGallery,
 }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [previewingVoiceId, setPreviewingVoiceId] = useState<string | null>(null);
@@ -859,6 +873,30 @@ export const Timeline: React.FC<TimelineProps> = ({
             >
               <ImageIcon className="w-3.5 h-3.5 text-sky-400" />
               <span>Backgrounds</span>
+            </button>
+          )}
+
+          {/* Scene Metadata & Slate Rig Button */}
+          {onOpenSceneMetadata && (
+            <button
+              onClick={() => onOpenSceneMetadata()}
+              className="px-2.5 py-1 rounded-md text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/35 flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_12px_rgba(245,158,11,0.15)]"
+              title="Attach and edit Scene Metadata (Shooting date, lens focal length, aperture)"
+            >
+              <Camera className="w-3.5 h-3.5 text-amber-400" />
+              <span>Scene Slate</span>
+            </button>
+          )}
+
+          {/* Cinematic Preset Gallery - Color Grading Filters Button */}
+          {onOpenCinematicGallery && (
+            <button
+              onClick={() => onOpenCinematicGallery()}
+              className="px-2.5 py-1 rounded-md text-xs font-semibold bg-fuchsia-500/15 hover:bg-fuchsia-500/25 text-fuchsia-300 border border-fuchsia-500/35 flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_12px_rgba(217,70,239,0.18)]"
+              title="Open Cinematic Preset Gallery to apply color grading filters (Noir, Technicolor, Retro, Desaturated)"
+            >
+              <Palette className="w-3.5 h-3.5 text-fuchsia-400" />
+              <span>Color Presets</span>
             </button>
           )}
 
@@ -1517,6 +1555,34 @@ export const Timeline: React.FC<TimelineProps> = ({
                   >
                     <ImageIcon className={`w-2.5 h-2.5 ${scene.backgroundImage ? 'text-cyan-400' : 'text-zinc-400'}`} />
                     <span>{scene.backgroundImage ? 'BG Set' : '+ BG'}</span>
+                  </button>
+                )}
+
+                {/* Scene Slate & Metadata Lens Badge / Button */}
+                {onOpenSceneMetadata && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenSceneMetadata(scene.id);
+                    }}
+                    className={`px-2 py-0.5 rounded border text-[10px] font-mono flex items-center gap-1 transition-all cursor-pointer font-bold shrink-0 ${
+                      scene.metadata?.lensFocalLength
+                        ? 'bg-amber-950/60 text-amber-300 border-amber-500/50 hover:border-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.2)]'
+                        : 'bg-zinc-900/80 text-zinc-400 border-zinc-750 hover:border-amber-500/40 hover:text-amber-300'
+                    }`}
+                    title={
+                      scene.metadata?.lensFocalLength
+                        ? `Slate: ${scene.metadata.lensFocalLength} • ${scene.metadata.cameraAperture || 'T1.5'} • ${scene.metadata.shootingDate} (Click to edit)`
+                        : 'Attach camera lens, aperture & shooting date metadata'
+                    }
+                  >
+                    <Camera className={`w-2.5 h-2.5 ${scene.metadata?.lensFocalLength ? 'text-amber-400' : 'text-zinc-400'}`} />
+                    <span>
+                      {scene.metadata?.lensFocalLength
+                        ? `${scene.metadata.lensFocalLength.split(' ')[0]} ${scene.metadata.cameraAperture || ''}`
+                        : '+ Slate'}
+                    </span>
                   </button>
                 )}
               </div>

@@ -25,7 +25,7 @@ import {
   Clock,
   Mic,
 } from 'lucide-react';
-import { Scene, AspectRatio } from '../types';
+import { Scene, AspectRatio, SoundtrackMixConfig } from '../types';
 import { exportMasterVideo, ExportProgress, ExportResult } from '../utils/exportMaster';
 import { downloadStoryboardPdf } from '../utils/storyboardPdf';
 
@@ -36,6 +36,8 @@ interface ExportModalProps {
   aspectRatio: AspectRatio;
   musicStyle: string;
   projectTitle?: string;
+  soundtrackMix?: SoundtrackMixConfig;
+  onOpenSoundtrackStudio?: () => void;
   onOpenGmail?: () => void;
 }
 
@@ -46,6 +48,8 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   aspectRatio,
   musicStyle,
   projectTitle = 'StoryCast Production',
+  soundtrackMix,
+  onOpenSoundtrackStudio,
   onOpenGmail,
 }) => {
   const [activeTab, setActiveTab] = useState<'video' | 'pdf' | 'python'>('video');
@@ -58,10 +62,12 @@ export const ExportModal: React.FC<ExportModalProps> = ({
 
   // Master Video Export Configuration State
   const [resolutionPreset, setResolutionPreset] = useState<'1080p' | '720p' | '4k' | 'vertical'>('1080p');
-  const [frameRate, setFrameRate] = useState<number>(30);
+  const [containerFormat, setContainerFormat] = useState<'mp4' | 'webm'>('mp4');
+  const [frameRate, setFrameRate] = useState<number>(24);
   const [bitrateMbps, setBitrateMbps] = useState<number>(8);
   const [includeSpeech, setIncludeSpeech] = useState(true);
   const [includeMusic, setIncludeMusic] = useState(true);
+  const [includeAmbientSfx, setIncludeAmbientSfx] = useState(true);
   const [enableAudioDucking, setEnableAudioDucking] = useState(true);
   const [burnInTimecode, setBurnInTimecode] = useState(true);
   const [burnInSubtitles, setBurnInSubtitles] = useState(true);
@@ -408,10 +414,20 @@ print("\nFinal story video with synchronized voiceover generated: story_with_nar
         scenes,
         {
           resolutionPreset,
+          containerFormat,
           aspectRatio,
           frameRate,
           bitrateMbps,
-          musicStyle,
+          musicStyle: soundtrackMix?.musicStyle || musicStyle,
+          musicVolume: soundtrackMix?.musicVolume ?? 0.35,
+          voiceoverVolume: soundtrackMix?.voiceoverVolume ?? 1.0,
+          ambientSfxStyle: soundtrackMix?.ambientSfxStyle ?? 'Neon Rain & Thunder',
+          ambientSfxVolume: soundtrackMix?.ambientSfxVolume ?? 0.28,
+          includeAmbientSfx,
+          afrobeatBpm: soundtrackMix?.afrobeatBpm ?? 108,
+          percussionIntensity: soundtrackMix?.percussionIntensity ?? 0.85,
+          logDrumBassBoost: soundtrackMix?.logDrumBassBoost ?? 0.80,
+          customAudioUrl: soundtrackMix?.customAudioUrl ?? null,
           includeSpeech,
           includeMusic,
           enableAudioDucking,
@@ -706,7 +722,15 @@ print("\nFinal story video with synchronized voiceover generated: story_with_nar
                           "{s.voiceoverText || s.title}"
                         </p>
 
-                        <div className="flex items-center gap-2 pt-0.5 text-[10px] text-zinc-500 font-mono">
+                        <div className="flex items-center gap-2 pt-0.5 text-[10px] text-zinc-500 font-mono flex-wrap">
+                          {s.metadata?.lensFocalLength && (
+                            <span className="text-amber-300 font-semibold">
+                              🔭 {s.metadata.lensFocalLength} ({s.metadata.cameraAperture || 'T1.5'})
+                            </span>
+                          )}
+                          {s.metadata?.shootingDate && (
+                            <span className="text-cyan-400">📅 {s.metadata.shootingDate}</span>
+                          )}
                           {s.sceneLocation && (
                             <span className="text-zinc-400">Set: {s.sceneLocation}</span>
                           )}
@@ -800,14 +824,28 @@ print("\nFinal story video with synchronized voiceover generated: story_with_nar
                     <div className="flex items-center justify-between">
                       <h5 className="text-xs font-bold text-zinc-300 font-mono uppercase tracking-wider flex items-center gap-1.5">
                         <Monitor className="w-3.5 h-3.5 text-cyan-400" />
-                        <span>Resolution & Master Profile</span>
+                        <span>Resolution, Container & Frame Rate</span>
                       </h5>
-                      <span className="text-[10px] text-zinc-500 font-mono">Client-Side Multiplex</span>
+                      <div className="flex items-center gap-1 bg-[#05070c] p-0.5 rounded-lg border border-zinc-800">
+                        {(['mp4', 'webm'] as const).map((fmt) => (
+                          <button
+                            key={fmt}
+                            onClick={() => setContainerFormat(fmt)}
+                            className={`px-2.5 py-0.5 rounded text-[10px] font-mono font-bold uppercase transition-all cursor-pointer ${
+                              containerFormat === fmt
+                                ? 'bg-amber-500 text-black shadow-[0_0_8px_rgba(245,158,11,0.4)]'
+                                : 'text-zinc-400 hover:text-zinc-200'
+                            }`}
+                          >
+                            .{fmt} Master
+                          </button>
+                        ))}
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       {[
-                        { id: '1080p', label: '1080p Full HD', spec: '1920x1080 · High Res' },
+                        { id: '1080p', label: '1080p Full HD', spec: '1920x1080 · Cinema' },
                         { id: '720p', label: '720p Web / Social', spec: '1280x720 · Fast Encode' },
                         { id: '4k', label: '4K Ultra Master', spec: '3840x2160 · Studio Grade' },
                         { id: 'vertical', label: '9:16 Vertical Reel', spec: '1080x1920 · TikTok/Shorts' },
@@ -828,24 +866,28 @@ print("\nFinal story video with synchronized voiceover generated: story_with_nar
                     </div>
 
                     {/* Frame Rate & Bitrate Controls */}
-                    <div className="grid grid-cols-2 gap-3 pt-2 border-t border-zinc-850/80 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-zinc-850/80 text-xs">
                       <div>
                         <label className="text-[11px] text-zinc-400 block mb-1 font-medium flex items-center gap-1">
                           <Gauge className="w-3 h-3 text-amber-400" />
-                          <span>Frame Rate (Pacing)</span>
+                          <span>Frame Rate (24fps Cinema / 60fps Smooth)</span>
                         </label>
                         <div className="grid grid-cols-3 gap-1 p-0.5 bg-[#05070c] rounded-lg border border-zinc-800">
-                          {[24, 30, 60].map((fps) => (
+                          {[
+                            { fps: 24, label: '24 fps · Film' },
+                            { fps: 30, label: '30 fps · Std' },
+                            { fps: 60, label: '60 fps · Smooth' },
+                          ].map((item) => (
                             <button
-                              key={fps}
-                              onClick={() => setFrameRate(fps)}
-                              className={`py-1 rounded font-mono text-[11px] font-semibold transition-all cursor-pointer ${
-                                frameRate === fps
+                              key={item.fps}
+                              onClick={() => setFrameRate(item.fps)}
+                              className={`py-1 rounded font-mono text-[10px] font-semibold transition-all cursor-pointer ${
+                                frameRate === item.fps
                                   ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                                   : 'text-zinc-400 hover:text-zinc-200'
                               }`}
                             >
-                              {fps} fps
+                              {item.label}
                             </button>
                           ))}
                         </div>
@@ -879,21 +921,37 @@ print("\nFinal story video with synchronized voiceover generated: story_with_nar
                     </div>
                   </div>
 
-                  {/* Audio Multiplex Matrix */}
+                  {/* 3-Track Audio Multiplex Matrix */}
                   <div className="bg-[#090b14] border border-zinc-800 rounded-xl p-3.5 space-y-2.5">
-                    <h5 className="text-xs font-bold text-zinc-300 font-mono uppercase tracking-wider flex items-center gap-1.5">
-                      <Volume2 className="w-3.5 h-3.5 text-purple-400" />
-                      <span>Audio Multiplex Matrix & Ducking</span>
-                    </h5>
+                    <div className="flex items-center justify-between">
+                      <h5 className="text-xs font-bold text-zinc-300 font-mono uppercase tracking-wider flex items-center gap-1.5">
+                        <Volume2 className="w-3.5 h-3.5 text-amber-400" />
+                        <span>3-Stem Multi-Track Audio Mixing & Ducking</span>
+                      </h5>
+                      {onOpenSoundtrackStudio && (
+                        <button
+                          onClick={() => {
+                            onClose();
+                            onOpenSoundtrackStudio();
+                          }}
+                          className="px-2.5 py-1 rounded-md bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-[10px] font-mono font-bold flex items-center gap-1 cursor-pointer transition-all"
+                        >
+                          <Music className="w-3 h-3 text-amber-400" />
+                          <span>Open Afrobeat & Soundtrack Mixer</span>
+                        </button>
+                      )}
+                    </div>
 
                     <div className="space-y-2 text-xs">
                       <label className="flex items-center justify-between p-2 rounded-lg bg-[#060810] border border-zinc-850 cursor-pointer hover:border-zinc-750 transition-colors">
                         <div className="flex items-center gap-2">
                           <Mic className="w-4 h-4 text-cyan-400 shrink-0" />
                           <div>
-                            <span className="font-semibold text-zinc-200">Voiceover & Dialogue Layer</span>
+                            <span className="font-semibold text-zinc-200">
+                              Stem 1 · Voiceover & Dialogue ({Math.round((soundtrackMix?.voiceoverVolume ?? 1) * 100)}%)
+                            </span>
                             <p className="text-[10px] text-zinc-400">
-                              Prioritizes recorded microphone clips, fallback to synthetic TTS. Frame hold synced to speech duration.
+                              Stitches recorded microphone takes or synthesized character TTS across every scene.
                             </p>
                           </div>
                         </div>
@@ -907,11 +965,13 @@ print("\nFinal story video with synchronized voiceover generated: story_with_nar
 
                       <label className="flex items-center justify-between p-2 rounded-lg bg-[#060810] border border-zinc-850 cursor-pointer hover:border-zinc-750 transition-colors">
                         <div className="flex items-center gap-2">
-                          <Music className="w-4 h-4 text-purple-400 shrink-0" />
+                          <Music className="w-4 h-4 text-amber-400 shrink-0" />
                           <div>
-                            <span className="font-semibold text-zinc-200">Ambient Background Score ({musicStyle})</span>
+                            <span className="font-semibold text-zinc-200">
+                              Stem 2 · Rhythmic Score ({soundtrackMix?.musicStyle || musicStyle} · {Math.round((soundtrackMix?.musicVolume ?? 0.35) * 100)}%)
+                            </span>
                             <p className="text-[10px] text-zinc-400">
-                              Synthesizes atmospheric mood soundtrack mixed into master audio track.
+                              Synthesizes poly-rhythmic Afrobeat log-drum/clave groove or custom score into master bus.
                             </p>
                           </div>
                         </div>
@@ -919,17 +979,37 @@ print("\nFinal story video with synchronized voiceover generated: story_with_nar
                           type="checkbox"
                           checked={includeMusic}
                           onChange={(e) => setIncludeMusic(e.target.checked)}
+                          className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-amber-500 cursor-pointer accent-amber-500"
+                        />
+                      </label>
+
+                      <label className="flex items-center justify-between p-2 rounded-lg bg-[#060810] border border-zinc-850 cursor-pointer hover:border-zinc-750 transition-colors">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="w-4 h-4 text-purple-400 shrink-0" />
+                          <div>
+                            <span className="font-semibold text-zinc-200">
+                              Stem 3 · Ambient Foley SFX ({soundtrackMix?.ambientSfxStyle || 'Neon Rain & Thunder'} · {Math.round((soundtrackMix?.ambientSfxVolume ?? 0.28) * 100)}%)
+                            </span>
+                            <p className="text-[10px] text-zinc-400">
+                              Mixes continuous environmental atmosphere and diegetic sound design under the cut.
+                            </p>
+                          </div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={includeAmbientSfx}
+                          onChange={(e) => setIncludeAmbientSfx(e.target.checked)}
                           className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-purple-500 cursor-pointer accent-purple-500"
                         />
                       </label>
 
                       <label className="flex items-center justify-between p-2 rounded-lg bg-[#060810] border border-zinc-850 cursor-pointer hover:border-zinc-750 transition-colors">
                         <div className="flex items-center gap-2">
-                          <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                           <div>
-                            <span className="font-semibold text-zinc-200">Intelligent Audio Ducking</span>
+                            <span className="font-semibold text-zinc-200">Intelligent Auto-Ducking</span>
                             <p className="text-[10px] text-zinc-400">
-                              Smoothly attenuates music by -18dB during spoken dialogue lines and recovers gracefully.
+                              Smoothly attenuates music during spoken dialogue lines and recovers on scene pauses.
                             </p>
                           </div>
                         </div>
@@ -938,7 +1018,7 @@ print("\nFinal story video with synchronized voiceover generated: story_with_nar
                           checked={enableAudioDucking}
                           disabled={!includeMusic || !includeSpeech}
                           onChange={(e) => setEnableAudioDucking(e.target.checked)}
-                          className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-amber-500 cursor-pointer accent-amber-500 disabled:opacity-40"
+                          className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-emerald-500 cursor-pointer accent-emerald-500 disabled:opacity-40"
                         />
                       </label>
                     </div>

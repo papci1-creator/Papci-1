@@ -5,10 +5,20 @@ import { generateSpeechWav } from './ttsSynthesizer';
 
 export interface MasterExportConfig {
   resolutionPreset?: '1080p' | '720p' | '4k' | 'vertical';
+  containerFormat?: 'mp4' | 'webm';
   aspectRatio: AspectRatio;
   frameRate?: number; // 24, 30, 60
   bitrateMbps?: number; // 4, 8, 16
   musicStyle: string;
+  musicVolume?: number;
+  voiceoverVolume?: number;
+  ambientSfxStyle?: string;
+  ambientSfxVolume?: number;
+  includeAmbientSfx?: boolean;
+  afrobeatBpm?: number;
+  percussionIntensity?: number;
+  logDrumBassBoost?: number;
+  customAudioUrl?: string | null;
   includeSpeech?: boolean;
   includeMusic?: boolean;
   enableAudioDucking?: boolean;
@@ -79,9 +89,19 @@ export async function exportMasterVideo(
   const {
     aspectRatio,
     musicStyle,
+    containerFormat = 'mp4',
     resolutionPreset = '1080p',
-    frameRate = 30,
+    frameRate = 24,
     bitrateMbps = 8,
+    musicVolume = 0.35,
+    voiceoverVolume = 1.0,
+    ambientSfxStyle = 'Neon Rain & Thunder',
+    ambientSfxVolume = 0.28,
+    includeAmbientSfx = true,
+    afrobeatBpm = 108,
+    percussionIntensity = 0.85,
+    logDrumBassBoost = 0.80,
+    customAudioUrl = null,
     includeSpeech = true,
     includeMusic = true,
     enableAudioDucking = true,
@@ -120,7 +140,7 @@ export async function exportMasterVideo(
 
   onProgress({
     progress: 2,
-    phase: 'Initializing Audio Multiplexing Subsystem...',
+    phase: 'Initializing 3-Track Audio Multiplexing Subsystem...',
     currentScene: 1,
     totalScenes: scenes.length,
     currentFrame: 0,
@@ -153,7 +173,7 @@ export async function exportMasterVideo(
 
       onProgress({
         progress: 3 + Math.round((i / scenes.length) * 12),
-        phase: `Preparing Audio for Scene ${i + 1}/${scenes.length}...`,
+        phase: `Preparing Voiceover Stem for Scene ${i + 1}/${scenes.length}...`,
         currentScene: i + 1,
         totalScenes: scenes.length,
         currentFrame: 0,
@@ -165,17 +185,15 @@ export async function exportMasterVideo(
       });
 
       if (s.audioUrl) {
-        // User recorded voice or previously generated TTS
         buf = await decodeAudioBuffer(audioCtx, s.audioUrl);
         if (buf) duration = buf.duration;
       } else if (s.voiceoverText?.trim()) {
-        // Synthesize speech WAV on the fly
         try {
           const ttsRes = generateSpeechWav(s.voiceoverText, {
             voiceActor: s.voiceActor,
             pitch: s.voicePitch,
             rate: s.voiceRate,
-            volume: s.audioVolume ?? 1.0,
+            volume: (s.audioVolume ?? 1.0) * voiceoverVolume,
           });
           buf = await decodeAudioBuffer(audioCtx, ttsRes.audioUrl);
           if (buf) duration = buf.duration;
@@ -211,17 +229,98 @@ export async function exportMasterVideo(
   const totalFrames = Math.max(1, Math.round(totalDuration * frameRate));
   const frameDuration = 1 / frameRate;
 
-  // 3. Ambient Music Synthesizer in Audio Stream
+  // 3A. Stem 2: Rhythmic Afrobeat / Background Music Synthesizer in Audio Stream
   let musicGainNode: GainNode | null = null;
+  let afrobeatExportTimer: number | null = null;
   if (includeMusic && musicStyle !== 'None') {
     const musicGain = audioCtx.createGain();
-    musicGain.gain.setValueAtTime(0.35, audioCtx.currentTime);
+    musicGain.gain.setValueAtTime(musicVolume, audioCtx.currentTime);
     musicGain.connect(exportMasterGain);
     musicGainNode = musicGain;
 
-    // Synthesize ambient music loop into musicGainNode
     const now = audioCtx.currentTime;
-    if (musicStyle === 'Synthwave Pulse') {
+    if (musicStyle === 'Custom Track' && customAudioUrl) {
+      const customBuf = await decodeAudioBuffer(audioCtx, customAudioUrl);
+      if (customBuf) {
+        const src = audioCtx.createBufferSource();
+        src.buffer = customBuf;
+        src.loop = true;
+        src.connect(musicGain);
+        src.start(now);
+      }
+    } else if (musicStyle === 'Afrobeat Groove' || musicStyle === 'Afro-Cyberpunk Fusion') {
+      const isCyber = musicStyle === 'Afro-Cyberpunk Fusion';
+      // Underlying warm pad
+      [110, 164.81, 196.0].forEach((freq) => {
+        const osc = audioCtx.createOscillator();
+        const padGain = audioCtx.createGain();
+        padGain.gain.setValueAtTime(0.14, now);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now);
+        osc.connect(padGain);
+        padGain.connect(musicGain);
+        osc.start(now);
+      });
+
+      // Live poly-rhythmic Afrobeat step trigger during export
+      const stepMs = Math.round((60 / afrobeatBpm / 4) * 1000);
+      const claveSteps = new Set([0, 3, 6, 10, 12]);
+      const bassSteps: Record<number, number> = { 0: 55, 3: 55, 7: 65.41, 10: 73.42, 14: 82.41 };
+      const melodySteps: Record<number, number> = { 2: 220, 5: 261.63, 8: 293.66, 11: 329.63, 15: 392 };
+      let stepIdx = 0;
+
+      afrobeatExportTimer = window.setInterval(() => {
+        if (audioCtx.state === 'closed') return;
+        const t = audioCtx.currentTime;
+        const s = stepIdx % 16;
+
+        // Log-drum sub bass
+        if (bassSteps[s]) {
+          const osc = audioCtx.createOscillator();
+          const g = audioCtx.createGain();
+          osc.type = isCyber ? 'sawtooth' : 'sine';
+          osc.frequency.setValueAtTime(bassSteps[s] * 2.2, t);
+          osc.frequency.exponentialRampToValueAtTime(bassSteps[s], t + 0.045);
+          g.gain.setValueAtTime(0.35 + logDrumBassBoost * 0.4, t);
+          g.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+          osc.connect(g);
+          g.connect(musicGain);
+          osc.start(t);
+          osc.stop(t + 0.30);
+        }
+
+        // Clave rimshot
+        if (claveSteps.has(s)) {
+          const osc = audioCtx.createOscillator();
+          const g = audioCtx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(s === 0 ? 880 : 740, t);
+          osc.frequency.exponentialRampToValueAtTime(420, t + 0.035);
+          g.gain.setValueAtTime(0.24 * percussionIntensity, t);
+          g.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+          osc.connect(g);
+          g.connect(musicGain);
+          osc.start(t);
+          osc.stop(t + 0.055);
+        }
+
+        // Highlife pluck
+        if (melodySteps[s]) {
+          const osc = audioCtx.createOscillator();
+          const g = audioCtx.createGain();
+          osc.type = isCyber ? 'sawtooth' : 'triangle';
+          osc.frequency.setValueAtTime(melodySteps[s], t);
+          g.gain.setValueAtTime(0.18, t);
+          g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+          osc.connect(g);
+          g.connect(musicGain);
+          osc.start(t);
+          osc.stop(t + 0.24);
+        }
+
+        stepIdx = (stepIdx + 1) % 16;
+      }, stepMs);
+    } else if (musicStyle === 'Synthwave Pulse') {
       const osc = audioCtx.createOscillator();
       osc.type = 'sawtooth';
       osc.frequency.setValueAtTime(110, now);
@@ -236,7 +335,6 @@ export async function exportMasterVideo(
         osc.start(now);
       });
     } else {
-      // Cinematic Ambient drone
       const osc = audioCtx.createOscillator();
       osc.type = 'sine';
       osc.frequency.setValueAtTime(82.41, now);
@@ -245,21 +343,54 @@ export async function exportMasterVideo(
     }
   }
 
-  // 4. Setup Combined MediaStream and MediaRecorder
+  // 3B. Stem 3: Ambient Foley & Environmental SFX Stream
+  if (includeAmbientSfx && ambientSfxStyle && ambientSfxStyle !== 'None') {
+    const sfxGain = audioCtx.createGain();
+    sfxGain.gain.setValueAtTime(ambientSfxVolume, audioCtx.currentTime);
+    sfxGain.connect(exportMasterGain);
+
+    const bufLen = audioCtx.sampleRate * 2;
+    const noiseBuf = audioCtx.createBuffer(1, bufLen, audioCtx.sampleRate);
+    const data = noiseBuf.getChannelData(0);
+    for (let i = 0; i < bufLen; i++) {
+      data[i] = (Math.random() * 2 - 1) * 0.08;
+    }
+    const noiseSrc = audioCtx.createBufferSource();
+    noiseSrc.buffer = noiseBuf;
+    noiseSrc.loop = true;
+
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(ambientSfxStyle === 'Deep Space Telemetry' ? 220 : 1200, audioCtx.currentTime);
+    noiseSrc.connect(filter);
+    filter.connect(sfxGain);
+    noiseSrc.start(audioCtx.currentTime);
+  }
+
+  // 4. Setup Combined MediaStream and MediaRecorder (supporting MP4 or WebM preference)
   const canvasStream = canvas.captureStream(frameRate);
   const combinedStream = new MediaStream();
 
   canvasStream.getVideoTracks().forEach((track) => combinedStream.addTrack(track));
   audioDest.stream.getAudioTracks().forEach((track) => combinedStream.addTrack(track));
 
-  // Determine supported mime type
   let mimeType = 'video/webm;codecs=vp9,opus';
-  if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1,mp4a.40.2')) {
-    mimeType = 'video/mp4;codecs=avc1,mp4a.40.2';
-  } else if (MediaRecorder.isTypeSupported('video/mp4')) {
-    mimeType = 'video/mp4';
-  } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
-    mimeType = 'video/webm;codecs=vp8,opus';
+  if (containerFormat === 'mp4') {
+    if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1,mp4a.40.2')) {
+      mimeType = 'video/mp4;codecs=avc1,mp4a.40.2';
+    } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+      mimeType = 'video/mp4';
+    } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
+      mimeType = 'video/webm;codecs=vp9,opus';
+    }
+  } else {
+    if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
+      mimeType = 'video/webm;codecs=vp9,opus';
+    } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
+      mimeType = 'video/webm;codecs=vp8,opus';
+    } else if (MediaRecorder.isTypeSupported('video/webm')) {
+      mimeType = 'video/webm';
+    }
   }
 
   const chunks: Blob[] = [];
@@ -297,7 +428,7 @@ export async function exportMasterVideo(
         source.buffer = audioBuf;
 
         const sceneVoiceGain = audioCtx.createGain();
-        sceneVoiceGain.gain.setValueAtTime(currentScene.audioVolume ?? 1.0, audioCtx.currentTime);
+        sceneVoiceGain.gain.setValueAtTime((currentScene.audioVolume ?? 1.0) * voiceoverVolume, audioCtx.currentTime);
         source.connect(sceneVoiceGain);
         sceneVoiceGain.connect(exportMasterGain);
 
@@ -305,10 +436,10 @@ export async function exportMasterVideo(
 
         // Apply audio ducking to music
         if (musicGainNode && enableAudioDucking) {
-          musicGainNode.gain.setTargetAtTime(0.12, audioCtx.currentTime, 0.15);
+          musicGainNode.gain.setTargetAtTime(musicVolume * 0.22, audioCtx.currentTime, 0.15);
           setTimeout(() => {
             if (musicGainNode) {
-              musicGainNode.gain.setTargetAtTime(0.35, audioCtx.currentTime, 0.4);
+              musicGainNode.gain.setTargetAtTime(musicVolume, audioCtx.currentTime, 0.4);
             }
           }, audioBuf.duration * 1000);
         }
@@ -429,10 +560,13 @@ export async function exportMasterVideo(
   // Stop recorder and cleanup audio context
   return new Promise((resolve, reject) => {
     recorder.onstop = () => {
-      const extension = mimeType.includes('mp4') ? 'mp4' : 'webm';
+      if (afrobeatExportTimer !== null) {
+        clearInterval(afrobeatExportTimer);
+      }
+      const extension = containerFormat === 'mp4' ? 'mp4' : 'webm';
       const blob = new Blob(chunks, { type: mimeType });
       const videoUrl = URL.createObjectURL(blob);
-      const fileName = `StoryCast_Master_${resolutionPreset}_${Date.now()}.${extension}`;
+      const fileName = `StoryCast_Master_${resolutionPreset}_${frameRate}fps_${Date.now()}.${extension}`;
 
       try {
         audioCtx.close().catch(() => {});
@@ -462,6 +596,9 @@ export async function exportMasterVideo(
     };
 
     recorder.onerror = (err) => {
+      if (afrobeatExportTimer !== null) {
+        clearInterval(afrobeatExportTimer);
+      }
       try {
         audioCtx.close().catch(() => {});
       } catch (_) {}

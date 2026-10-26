@@ -1,4 +1,5 @@
 import { Scene, AspectRatio } from '../types';
+import { CINEMATIC_GRADE_PRESETS } from '../data/presets';
 
 export interface RenderOptions {
   scene: Scene;
@@ -142,6 +143,40 @@ export function renderCinematicFrame(
     particleType: 'rain',
   };
 
+  // Extract per-clip visual effect intensity & LUT color grade parameters
+  const meta = scene.metadata;
+  const activeGrade =
+    scene.colorGradePreset && scene.colorGradePreset !== 'None'
+      ? CINEMATIC_GRADE_PRESETS.find((p) => p.id === scene.colorGradePreset)
+      : undefined;
+  const gradeBlend = activeGrade ? (scene.colorGradeIntensity ?? 100) / 100 : 0;
+  const lerp = (base: number, target: number, t: number) => base + (target - base) * t;
+
+  const baseBloom = meta?.bloomIntensity ?? 35;
+  const baseGrain = meta?.filmGrain ?? 20;
+  const baseContrast = meta?.contrast ?? 105;
+  const baseSaturation = meta?.saturation ?? 110;
+  const baseChroma = meta?.chromaticAberration ?? 15;
+  const baseVignette = meta?.vignetteIntensity ?? 45;
+  const baseSepia = meta?.sepia ?? 0;
+  const baseHue = meta?.hueRotate ?? 0;
+
+  const bloomAmt = (activeGrade ? lerp(baseBloom, activeGrade.bloomIntensity, gradeBlend) : baseBloom) / 100;
+  const grainAmt = (activeGrade ? lerp(baseGrain, activeGrade.filmGrain, gradeBlend) : baseGrain) / 100;
+  const contrastPct = Math.round(activeGrade ? lerp(baseContrast, activeGrade.contrast, gradeBlend) : baseContrast);
+  const saturationPct = Math.round(
+    activeGrade ? lerp(baseSaturation, activeGrade.saturation, gradeBlend) : baseSaturation
+  );
+  const chromaAmt = (activeGrade ? lerp(baseChroma, activeGrade.chromaticAberration, gradeBlend) : baseChroma) / 100;
+  const vignetteAmt =
+    (activeGrade ? lerp(baseVignette, activeGrade.vignetteIntensity, gradeBlend) : baseVignette) / 100;
+  const sepiaPct = Math.round(activeGrade ? lerp(baseSepia, activeGrade.sepia, gradeBlend) : baseSepia);
+  const hueDeg = Math.round(activeGrade ? lerp(baseHue, activeGrade.hueRotate, gradeBlend) : baseHue);
+
+  // Apply hardware-accelerated canvas filter for contrast, saturation, sepia, hue-rotate, and subtle bloom lift
+  const brightnessPct = Math.round(100 + (bloomAmt - 0.35) * 14);
+  ctx.filter = `contrast(${contrastPct}%) saturate(${saturationPct}%) sepia(${sepiaPct}%) hue-rotate(${hueDeg}deg) brightness(${brightnessPct}%)`;
+
   let hasDrawnLiveVideo = false;
   if (options.useLiveVideo && options.videoElement && options.videoElement.readyState >= 2) {
     try {
@@ -212,6 +247,9 @@ export function renderCinematicFrame(
     ctx.fillStyle = bgGrad;
     ctx.fillRect(-60, -60, width + 120, height + 120);
   }
+
+  // Reset filter after drawing primary base image/environment so overlays remain crisp
+  ctx.filter = 'none';
 
   // 2. CELESTIAL OR NEON GLOW (Sun, Moon, or Cyber Neon Sun) - if procedural
   const sunX = isEven ? width * 0.75 : width * 0.25;
@@ -363,29 +401,125 @@ export function renderCinematicFrame(
     }
   });
 
-  // 7. CINEMATIC ANAMORPHIC FLARE
-  const flareX = sunX + (progress - 0.5) * 80;
-  const flareGrad = ctx.createLinearGradient(flareX - width * 0.4, sunY, flareX + width * 0.4, sunY);
-  flareGrad.addColorStop(0, 'rgba(0, 240, 255, 0)');
-  flareGrad.addColorStop(0.45, 'rgba(0, 240, 255, 0.15)');
-  flareGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.4)');
-  flareGrad.addColorStop(0.55, 'rgba(255, 170, 0, 0.15)');
-  flareGrad.addColorStop(1, 'rgba(0, 240, 255, 0)');
+  // 7. CINEMATIC ANAMORPHIC FLARE & OPTICAL BLOOM HALATION (scaled by bloomIntensity)
+  if (bloomAmt > 0.02) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
 
-  ctx.fillStyle = flareGrad;
-  ctx.fillRect(0, sunY - 4, width, 8);
+    // Horizontal anamorphic streak scaled by bloomAmt
+    const flareX = sunX + (progress - 0.5) * 80;
+    const flareHeight = 6 + bloomAmt * 22;
+    const flareGrad = ctx.createLinearGradient(flareX - width * 0.48, sunY, flareX + width * 0.48, sunY);
+    flareGrad.addColorStop(0, 'rgba(0, 240, 255, 0)');
+    flareGrad.addColorStop(0.35, `rgba(0, 240, 255, ${(0.18 * bloomAmt).toFixed(3)})`);
+    flareGrad.addColorStop(0.5, `rgba(255, 255, 255, ${(0.55 * bloomAmt).toFixed(3)})`);
+    flareGrad.addColorStop(0.65, `rgba(255, 170, 0, ${(0.22 * bloomAmt).toFixed(3)})`);
+    flareGrad.addColorStop(1, 'rgba(0, 240, 255, 0)');
+
+    ctx.fillStyle = flareGrad;
+    ctx.fillRect(0, sunY - flareHeight / 2, width, flareHeight);
+
+    // Wide specular bloom halation dome
+    const bloomDome = ctx.createRadialGradient(
+      sunX,
+      sunY,
+      10,
+      width / 2,
+      height * 0.45,
+      width * (0.45 + bloomAmt * 0.35)
+    );
+    bloomDome.addColorStop(0, `rgba(0, 240, 255, ${(0.28 * bloomAmt).toFixed(3)})`);
+    bloomDome.addColorStop(0.45, `rgba(255, 170, 0, ${(0.14 * bloomAmt).toFixed(3)})`);
+    bloomDome.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = bloomDome;
+    ctx.fillRect(-40, -40, width + 80, height + 80);
+
+    ctx.restore();
+  }
 
   ctx.restore(); // Restore camera matrix
 
-  // 8. VIGNETTE & LETTERBOX
-  const vigGrad = ctx.createRadialGradient(width / 2, height / 2, width * 0.35, width / 2, height / 2, width * 0.75);
-  vigGrad.addColorStop(0, 'rgba(0,0,0,0)');
-  vigGrad.addColorStop(0.7, 'rgba(0,0,0,0.3)');
-  vigGrad.addColorStop(1, 'rgba(0,0,0,0.85)');
-  ctx.fillStyle = vigGrad;
-  ctx.fillRect(0, 0, width, height);
+  // 7b. CHROMATIC ABERRATION (Optical RGB Edge Fringing)
+  if (chromaAmt > 0.04) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    const fringeW = Math.max(4, width * 0.035 * chromaAmt);
+    // Left/Right cyan & magenta optical dispersion bands
+    const leftFringe = ctx.createLinearGradient(0, 0, fringeW * 2.5, 0);
+    leftFringe.addColorStop(0, `rgba(0, 240, 255, ${(0.28 * chromaAmt).toFixed(3)})`);
+    leftFringe.addColorStop(1, 'rgba(0, 240, 255, 0)');
+    ctx.fillStyle = leftFringe;
+    ctx.fillRect(0, 0, fringeW * 2.5, height);
 
-  // 9. CINEMATIC OVERLAYS & HUD (Director Watermark / Timestamp)
+    const rightFringe = ctx.createLinearGradient(width - fringeW * 2.5, 0, width, 0);
+    rightFringe.addColorStop(0, 'rgba(255, 0, 128, 0)');
+    rightFringe.addColorStop(1, `rgba(255, 0, 128, ${(0.28 * chromaAmt).toFixed(3)})`);
+    ctx.fillStyle = rightFringe;
+    ctx.fillRect(width - fringeW * 2.5, 0, fringeW * 2.5, height);
+    ctx.restore();
+  }
+
+  // 7c. 35MM FILM GRAIN TEXTURE (Photochemical Silver Halide Noise)
+  if (grainAmt > 0.03) {
+    ctx.save();
+    const grainDots = Math.floor(140 * grainAmt);
+    for (let g = 0; g < grainDots; g++) {
+      const gx = (Math.sin(g * 12.9898 + timeInScene * 43.2) * 43758.5453) % 1;
+      const gy = (Math.cos(g * 78.233 + timeInScene * 29.7) * 23421.631) % 1;
+      const x = Math.abs(gx) * width;
+      const y = Math.abs(gy) * height;
+      const isBright = g % 2 === 0;
+      ctx.fillStyle = isBright
+        ? `rgba(255, 255, 255, ${(0.16 * grainAmt).toFixed(3)})`
+        : `rgba(0, 0, 0, ${(0.24 * grainAmt).toFixed(3)})`;
+      const size = (g % 3 === 0 ? 2 : 1.3);
+      ctx.fillRect(x, y, size, size);
+    }
+    ctx.restore();
+  }
+
+  // 7d. LUT SPLIT-TONE & COLOR GRADE OVERLAY WASH
+  if (activeGrade && gradeBlend > 0.02) {
+    ctx.save();
+    ctx.globalAlpha = gradeBlend;
+
+    if (activeGrade.tintOverlay && activeGrade.tintOverlay !== 'rgba(0, 0, 0, 0)') {
+      ctx.fillStyle = activeGrade.tintOverlay;
+      ctx.fillRect(0, 0, width, height);
+    }
+
+    if (activeGrade.shadowTint || activeGrade.highlightTint) {
+      const splitGrad = ctx.createLinearGradient(0, 0, 0, height);
+      splitGrad.addColorStop(0, activeGrade.highlightTint || 'rgba(0,0,0,0)');
+      splitGrad.addColorStop(0.5, 'rgba(0,0,0,0)');
+      splitGrad.addColorStop(1, activeGrade.shadowTint || 'rgba(0,0,0,0)');
+      ctx.fillStyle = splitGrad;
+      ctx.fillRect(0, 0, width, height);
+    }
+
+    ctx.restore();
+  }
+
+  // 8. VIGNETTE & LETTERBOX (Scaled by vignetteIntensity)
+  if (vignetteAmt > 0.02) {
+    const innerRadius = width * Math.max(0.18, 0.45 - vignetteAmt * 0.22);
+    const outerRadius = width * 0.78;
+    const vigGrad = ctx.createRadialGradient(
+      width / 2,
+      height / 2,
+      innerRadius,
+      width / 2,
+      height / 2,
+      outerRadius
+    );
+    vigGrad.addColorStop(0, 'rgba(0,0,0,0)');
+    vigGrad.addColorStop(0.65, `rgba(0,0,0,${(0.38 * vignetteAmt * 1.4).toFixed(3)})`);
+    vigGrad.addColorStop(1, `rgba(0,0,0,${Math.min(0.96, 0.85 * vignetteAmt * 1.5).toFixed(3)})`);
+    ctx.fillStyle = vigGrad;
+    ctx.fillRect(0, 0, width, height);
+  }
+
+  // 9. CINEMATIC OVERLAYS & HUD (Director Watermark / Timestamp / Optical VFX Telemetry)
   ctx.fillStyle = 'rgba(0, 240, 255, 0.7)';
   ctx.font = '11px "JetBrains Mono", monospace';
   ctx.fillText(
@@ -393,6 +527,18 @@ export function renderCinematicFrame(
     24,
     32
   );
+
+  if (
+    meta?.showOverlay !== false &&
+    (activeGrade || meta?.bloomIntensity !== undefined || meta?.filmGrain !== undefined || meta?.contrast !== undefined)
+  ) {
+    const lutTag = activeGrade ? `[LUT: ${activeGrade.name.toUpperCase()} ${scene.colorGradeIntensity ?? 100}%] // ` : '';
+    const vfxTag = `${lutTag}FX // BLOOM:${Math.round(bloomAmt * 100)}% GRAIN:${Math.round(grainAmt * 100)}% CONT:${contrastPct}%`;
+    ctx.fillStyle = 'rgba(255, 170, 0, 0.82)';
+    ctx.textAlign = 'right';
+    ctx.fillText(vfxTag, width - 24, 32);
+    ctx.textAlign = 'left';
+  }
 
   // 10. SUBTITLES & LOWER-THIRD CAPTIONS
   if (showSubtitles && scene.voiceoverText) {
