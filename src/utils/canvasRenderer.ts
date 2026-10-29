@@ -540,6 +540,41 @@ export function renderCinematicFrame(
     ctx.textAlign = 'left';
   }
 
+  // 9b. DIRECTOR'S NOTEBOOK LIVE CAMERA FOCUS PULL & LIGHTING HUD TELEMETRY
+  const notebook = scene.directorNotebook || meta?.directorNotebook;
+  if (meta?.showOverlay !== false && notebook) {
+    const cues = notebook.cameraFocusCues || [];
+    if (cues.length > 0) {
+      // Find the latest active focus cue at or before current timeInScene
+      const activeCue =
+        [...cues]
+          .sort((a, b) => a.timestampSec - b.timestampSec)
+          .filter((c) => timeInScene >= c.timestampSec)
+          .pop() || cues[0];
+      if (activeCue) {
+        ctx.fillStyle = 'rgba(16, 185, 129, 0.88)';
+        ctx.font = '10px "JetBrains Mono", monospace';
+        ctx.fillText(
+          `[1ST AC FOCUS // ${activeCue.cueType.toUpperCase()}] TARGET: ${activeCue.targetSubject.toUpperCase()} @ ${activeCue.focalDistance} (${activeCue.apertureMark})`,
+          24,
+          50
+        );
+      }
+    }
+    const keyLight = (notebook.lightingReferences || [])[0];
+    if (keyLight) {
+      ctx.fillStyle = 'rgba(251, 191, 36, 0.82)';
+      ctx.font = '10px "JetBrains Mono", monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText(
+        `[RIG: ${keyLight.setupType.toUpperCase()}] ${keyLight.label.toUpperCase()} (${keyLight.colorTemp} • ${keyLight.ratioOrIntensity})`,
+        width - 24,
+        50
+      );
+      ctx.textAlign = 'left';
+    }
+  }
+
   // 10. SUBTITLES & LOWER-THIRD CAPTIONS
   if (showSubtitles && scene.voiceoverText) {
     const text = scene.voiceoverText;
@@ -578,7 +613,7 @@ export function renderCinematicFrame(
     ctx.textBaseline = 'alphabetic';
   }
 
-  // 11. SCENE TRANSITION EFFECTS
+  // 11. SCENE TRANSITION EFFECTS (12+ Artistic Shader Transitions)
   const effect = scene.transitionEffect || 'Dissolve';
   if (transitionProgress > 0 && effect !== 'None') {
     const t = Math.max(0, Math.min(1, transitionProgress));
@@ -588,6 +623,157 @@ export function renderCinematicFrame(
       // Classic Cinematic Blackout Dip
       ctx.fillStyle = `rgba(4, 5, 8, ${bell * 0.98})`;
       ctx.fillRect(0, 0, width, height);
+    } else if (effect === 'VHS Glitch') {
+      // Analog VHS Tape Tracking Tear, CRT Scanline Jitter & Phosphor Color Bleed
+      ctx.save();
+      const bands = 14;
+      for (let i = 0; i < bands; i++) {
+        const y = (height / bands) * i;
+        const h = height / bands;
+        const jitter = Math.sin(i * 5.1 + t * 38) * bell * 65;
+        ctx.fillStyle = i % 2 === 0
+          ? `rgba(244, 63, 94, ${bell * 0.42})`
+          : `rgba(0, 240, 255, ${bell * 0.38})`;
+        ctx.fillRect(jitter, y, width, h * 0.7);
+      }
+      // VHS Tracking Static Bar
+      const trackingY = (t * height * 1.4) % height;
+      ctx.fillStyle = `rgba(255, 255, 255, ${bell * 0.65})`;
+      ctx.fillRect(0, trackingY, width, 18 * bell);
+      // Scanline overlay
+      ctx.fillStyle = `rgba(0, 0, 0, ${bell * 0.35})`;
+      for (let sy = 0; sy < height; sy += 4) {
+        ctx.fillRect(0, sy, width, 1.5);
+      }
+      ctx.restore();
+    } else if (effect === 'Light Leak') {
+      // Warm Golden-Amber & Cyan Anamorphic Lens Housing Leak
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      const leakX = width * (0.2 + t * 0.6);
+      const leakGrad = ctx.createRadialGradient(
+        leakX,
+        height * 0.45,
+        10,
+        leakX,
+        height * 0.5,
+        width * 0.75
+      );
+      leakGrad.addColorStop(0, `rgba(255, 250, 220, ${bell * 0.95})`);
+      leakGrad.addColorStop(0.35, `rgba(251, 191, 36, ${bell * 0.82})`);
+      leakGrad.addColorStop(0.7, `rgba(249, 115, 22, ${bell * 0.55})`);
+      leakGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = leakGrad;
+      ctx.fillRect(0, 0, width, height);
+
+      // Horizontal anamorphic streak
+      ctx.fillStyle = `rgba(0, 240, 255, ${bell * 0.45})`;
+      ctx.fillRect(0, height * 0.46, width, 14 * bell);
+      ctx.restore();
+    } else if (effect === 'Film Burn') {
+      // 35mm Celluloid Emulsion Melt, Sprocket Halation & Charred Amber Edges
+      ctx.save();
+      const burnGrad = ctx.createRadialGradient(
+        width * (0.5 + Math.sin(t * 6) * 0.15),
+        height * 0.5,
+        width * 0.05 * (1 - bell),
+        width * 0.5,
+        height * 0.5,
+        width * 0.7
+      );
+      burnGrad.addColorStop(0, `rgba(255, 255, 255, ${bell * 0.98})`);
+      burnGrad.addColorStop(0.3, `rgba(251, 146, 60, ${bell * 0.9})`);
+      burnGrad.addColorStop(0.65, `rgba(180, 35, 15, ${bell * 0.85})`);
+      burnGrad.addColorStop(1, `rgba(15, 5, 2, ${bell * 0.92})`);
+      ctx.fillStyle = burnGrad;
+      ctx.fillRect(0, 0, width, height);
+
+      // Sprocket hole halation strips along left/right frame borders
+      ctx.fillStyle = `rgba(255, 230, 180, ${bell * 0.8})`;
+      for (let sp = 20; sp < height; sp += 48) {
+        ctx.fillRect(14, sp, 18, 26);
+        ctx.fillRect(width - 32, sp, 18, 26);
+      }
+      ctx.restore();
+    } else if (effect === 'Whip Pan') {
+      // High-Velocity Directional Motion Blur Streaks
+      ctx.save();
+      const streakGrad = ctx.createLinearGradient(0, 0, width, 0);
+      streakGrad.addColorStop(0, `rgba(8, 12, 24, ${bell * 0.9})`);
+      streakGrad.addColorStop(0.5, `rgba(56, 189, 248, ${bell * 0.65})`);
+      streakGrad.addColorStop(1, `rgba(8, 12, 24, ${bell * 0.9})`);
+      ctx.fillStyle = streakGrad;
+      ctx.fillRect(0, 0, width, height);
+
+      for (let s = 0; s < 18; s++) {
+        const sy = ((s * 53) % height);
+        const sx = ((t * width * 2 + s * 90) % width) - width * 0.3;
+        ctx.fillStyle = s % 2 === 0
+          ? `rgba(255, 255, 255, ${bell * 0.75})`
+          : `rgba(251, 191, 36, ${bell * 0.65})`;
+        ctx.fillRect(sx, sy, width * 0.55 * bell, 4 + (s % 4) * 2);
+      }
+      ctx.restore();
+    } else if (effect === 'Iris Vignette') {
+      // Classic Noir Mechanical Circular Aperture Iris Contraction/Expansion
+      ctx.save();
+      const maxRadius = Math.hypot(width, height) * 0.6;
+      const openRadius = Math.max(4, maxRadius * (1 - bell * 0.96));
+      const irisGrad = ctx.createRadialGradient(
+        width / 2,
+        height / 2,
+        openRadius * 0.85,
+        width / 2,
+        height / 2,
+        openRadius * 1.15 + 10
+      );
+      irisGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+      irisGrad.addColorStop(0.6, `rgba(168, 85, 247, ${bell * 0.35})`);
+      irisGrad.addColorStop(1, 'rgba(3, 4, 8, 0.98)');
+      ctx.fillStyle = irisGrad;
+      ctx.fillRect(0, 0, width, height);
+      ctx.restore();
+    } else if (effect === 'Flash Cut') {
+      // High-Energy Xenon White-Cyan Strobe Overexposure Snap
+      ctx.save();
+      const flashAlpha = Math.pow(bell, 0.65) * 0.96;
+      ctx.fillStyle = `rgba(235, 252, 255, ${flashAlpha})`;
+      ctx.fillRect(0, 0, width, height);
+      ctx.restore();
+    } else if (effect === 'Prism Split') {
+      // Multi-Faceted Optical Glass Spectral Dispersion
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      const prismOffset = bell * 55;
+      const leftPrism = ctx.createLinearGradient(0, 0, width * 0.6, height);
+      leftPrism.addColorStop(0, `rgba(52, 211, 153, ${bell * 0.65})`);
+      leftPrism.addColorStop(0.5, `rgba(0, 240, 255, ${bell * 0.5})`);
+      leftPrism.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = leftPrism;
+      ctx.fillRect(-prismOffset, 0, width, height);
+
+      const rightPrism = ctx.createLinearGradient(width * 0.4, 0, width, height);
+      rightPrism.addColorStop(0, 'rgba(0, 0, 0, 0)');
+      rightPrism.addColorStop(0.5, `rgba(236, 72, 153, ${bell * 0.55})`);
+      rightPrism.addColorStop(1, `rgba(251, 191, 36, ${bell * 0.65})`);
+      ctx.fillStyle = rightPrism;
+      ctx.fillRect(prismOffset, 0, width, height);
+      ctx.restore();
+    } else if (effect === 'Luma Melt') {
+      // Highlight Threshold Liquid Bleed
+      ctx.save();
+      const columns = 20;
+      const colW = width / columns;
+      for (let c = 0; c < columns; c++) {
+        const dripH = height * bell * (0.55 + 0.45 * Math.sin(c * 1.9 + t * 8));
+        const meltGrad = ctx.createLinearGradient(0, 0, 0, dripH);
+        meltGrad.addColorStop(0, `rgba(12, 6, 28, ${bell * 0.95})`);
+        meltGrad.addColorStop(0.75, `rgba(192, 132, 252, ${bell * 0.7})`);
+        meltGrad.addColorStop(1, `rgba(0, 240, 255, ${bell * 0.85})`);
+        ctx.fillStyle = meltGrad;
+        ctx.fillRect(c * colW, 0, colW + 1, dripH);
+      }
+      ctx.restore();
     } else if (effect === 'Glitch') {
       // Cyberpunk Chromatic RGB Split & Sliced Scanlines
       const sliceCount = 8;

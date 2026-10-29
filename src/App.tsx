@@ -14,6 +14,7 @@ import { TurnaroundModal } from './components/TurnaroundModal';
 import { GoogleFormsModal } from './components/GoogleFormsModal';
 import { BatchAudioModal } from './components/BatchAudioModal';
 import { TransitionModal } from './components/TransitionModal';
+import { SceneTransitionLibrary } from './components/SceneTransitionLibrary';
 import { CostumeLockModal } from './components/CostumeLockModal';
 import { GmailModal } from './components/GmailModal';
 import { BackgroundGeneratorModal } from './components/BackgroundGeneratorModal';
@@ -58,6 +59,7 @@ export default function App() {
   const [isGoogleFormsOpen, setIsGoogleFormsOpen] = useState(false);
   const [isBatchAudioOpen, setIsBatchAudioOpen] = useState(false);
   const [isTransitionsOpen, setIsTransitionsOpen] = useState(false);
+  const [transitionTargetSceneId, setTransitionTargetSceneId] = useState<string | undefined>(undefined);
   const [isCostumeLockOpen, setIsCostumeLockOpen] = useState(false);
   const [isGmailOpen, setIsGmailOpen] = useState(false);
   const [isBackgroundGeneratorOpen, setIsBackgroundGeneratorOpen] = useState(false);
@@ -138,6 +140,56 @@ export default function App() {
         notes: 'Volumetric cyan haze, wet reflective pavement',
         showOverlay: true,
       },
+      directorNotebook: {
+        richTextNotes:
+          '<b>[BLOCKING]</b> Leo enters from lower catwalk shadow, pausing at rain-slicked railing.<br/><b>[SUBTEXT]</b> Guarded vigilance—eyes scan upper gantry before revealing the shard.<br/><b>[CAMERA MOTIVATION]</b> Slow low-angle push-in compresses the towering Neo-Tokyo skyline.',
+        blockingAndSubtext: 'Hold eye-line 15° off-axis until 2.8s mark, then pivot into key light.',
+        audioFoleyCues: 'Heavy rain droplets on gold visor, distant cyber siren, wet boot step at 2.4s.',
+        lightingNotes: '4:1 high-contrast cyan/magenta split lighting with wet asphalt specular bounce.',
+        lightingReferences: [
+          {
+            id: 'light-s1-1',
+            label: 'Overhead Cyan Neon Bank',
+            setupType: 'Key Light',
+            colorTemp: '6500K',
+            colorHex: '#00f0ff',
+            ratioOrIntensity: '4:1 Key-to-Fill',
+            referenceImageUrl:
+              'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80',
+            notes: '45° camera-left through 1/2 grid diffusion.',
+          },
+          {
+            id: 'light-s1-2',
+            label: 'Magenta Hologram Edge Kicker',
+            setupType: 'Rim / Back Light',
+            colorTemp: '3200K + Magenta',
+            colorHex: '#ff007f',
+            ratioOrIntensity: '85% Specular Rim',
+            notes: 'Back-right 135° angle cutting through rain mist.',
+          },
+        ],
+        cameraFocusCues: [
+          {
+            id: 'focus-s1-1',
+            timestampSec: 0.4,
+            cueType: 'Shallow DOF Tracking',
+            targetSubject: 'Raindrops on Foreground Rail',
+            focalDistance: '0.65m',
+            apertureMark: 'T1.5',
+            notes: 'Background figure in soft anamorphic bokeh.',
+          },
+          {
+            id: 'focus-s1-2',
+            timestampSec: 2.5,
+            cueType: 'Rack Focus',
+            targetSubject: 'Leo Eyes & Gold Visor',
+            focalDistance: '1.85m',
+            apertureMark: 'T1.5',
+            notes: 'Snap focus pull on metallic footstep foley cue.',
+          },
+        ],
+        lastUpdated: '2026-10-12T20:00:00.000Z',
+      },
       status: 'ready',
       progress: 100,
       generationPhase: 'Render Ready (100%)',
@@ -191,6 +243,36 @@ export default function App() {
         rollNumber: 'A001',
         notes: 'Extreme close up on glowing neural filaments',
         showOverlay: true,
+      },
+      directorNotebook: {
+        richTextNotes:
+          '<b>[BLOCKING]</b> Bionic fingers slowly uncurl to expose the pulsing crystalline shard.<br/><b>[SUBTEXT]</b> Reverence and quiet awe—this artifact carries a sentient memory.<br/><b>[CAMERA MOTIVATION]</b> 85mm macro orbital arc isolates the shard from the vault walls.',
+        blockingAndSubtext: 'Micro-tremor in bionic fingers stabilizes as blue core illuminates palm.',
+        audioFoleyCues: 'Sub-audible crystalline harmonic chime, precision titanium servo whirr.',
+        lightingNotes: 'Practical bioluminescent core key light from palm + warm amber vault rim.',
+        lightingReferences: [
+          {
+            id: 'light-s2-1',
+            label: 'Shard Bioluminescent Practical',
+            setupType: 'Practical',
+            colorTemp: '7000K Electric Cyan',
+            colorHex: '#00f0ff',
+            ratioOrIntensity: '6:1 Macro Contrast',
+            notes: 'Upward bounce onto visor and bionic knuckles.',
+          },
+        ],
+        cameraFocusCues: [
+          {
+            id: 'focus-s2-1',
+            timestampSec: 1.0,
+            cueType: 'Lock Focus',
+            targetSubject: 'Internal Neural Filaments of Shard',
+            focalDistance: '0.35m Macro',
+            apertureMark: 'T2.0',
+            notes: 'Razor-thin 4mm depth of field plane.',
+          },
+        ],
+        lastUpdated: '2026-10-12T20:15:00.000Z',
       },
       status: 'ready',
       progress: 100,
@@ -246,6 +328,36 @@ export default function App() {
         notes: 'Dynamic drone tracking, red laser flare',
         showOverlay: true,
       },
+      directorNotebook: {
+        richTextNotes:
+          '<b>[BLOCKING]</b> Malakor stands on upper command bridge while three hunter-drones descend through volumetric fog.<br/><b>[SUBTEXT]</b> Cold institutional dominance—no wasted movement.<br/><b>[CAMERA MOTIVATION]</b> 1/96s (90° shutter) staccato action clarity as red targeting beams sweep frame.',
+        blockingAndSubtext: 'Malakor remains dead-center while drone searchlights criss-cross foreground.',
+        audioFoleyCues: 'High-pitch laser lock tone, twin-turbine thruster wash, trench coat leather creak.',
+        lightingNotes: 'Piercing crimson laser volumetric beams cutting through dense cyan fog.',
+        lightingReferences: [
+          {
+            id: 'light-s3-1',
+            label: 'Crimson Drone Searchlight Array',
+            setupType: 'Volumetric / Haze',
+            colorTemp: '2400K Crimson Laser',
+            colorHex: '#ff0055',
+            ratioOrIntensity: '8:1 Hard Beam',
+            notes: 'Sweeping overhead through heavy DF-50 haze.',
+          },
+        ],
+        cameraFocusCues: [
+          {
+            id: 'focus-s3-1',
+            timestampSec: 0.6,
+            cueType: 'Split Diopter',
+            targetSubject: 'Malakor Profile (Near) + Drone Swarm (Far)',
+            focalDistance: '1.2m / 18m Split',
+            apertureMark: 'T1.8',
+            notes: 'Simultaneous dual-plane sharpness for heightened paranoia.',
+          },
+        ],
+        lastUpdated: '2026-10-13T21:00:00.000Z',
+      },
       status: 'ready',
       progress: 100,
       generationPhase: 'Render Ready (100%)',
@@ -261,9 +373,54 @@ export default function App() {
 
   const totalDuration = scenes.reduce((acc, s) => acc + s.duration, 0);
 
-  // Automatically recalculate voiceover audio ducking schedules whenever scenes are created or updated
+  // Hydrate persisted Director's Notebook & Scene Metadata from localStorage on mount
+  useEffect(() => {
+    try {
+      const savedRaw = localStorage.getItem('storycast_scene_notebooks_v1');
+      if (savedRaw) {
+        const parsedMap = JSON.parse(savedRaw) as Record<
+          string,
+          { directorNotebook?: Scene['directorNotebook']; metadata?: Scene['metadata'] }
+        >;
+        setScenes((prev) =>
+          prev.map((s) => {
+            const savedEntry = parsedMap[s.id];
+            if (!savedEntry) return s;
+            return {
+              ...s,
+              directorNotebook: savedEntry.directorNotebook || s.directorNotebook,
+              metadata: savedEntry.metadata
+                ? { ...s.metadata, ...savedEntry.metadata }
+                : s.metadata,
+            };
+          })
+        );
+      }
+    } catch (e) {
+      console.warn('Could not load saved scene notebooks:', e);
+    }
+  }, []);
+
+  // Automatically recalculate voiceover audio ducking schedules & persist Director's Notebooks whenever scenes update
   useEffect(() => {
     audioEngine.updateDuckingScheduleFromScenes(scenes);
+    try {
+      const notebookMap: Record<
+        string,
+        { directorNotebook?: Scene['directorNotebook']; metadata?: Scene['metadata'] }
+      > = {};
+      scenes.forEach((s) => {
+        if (s.directorNotebook || s.metadata) {
+          notebookMap[s.id] = {
+            directorNotebook: s.directorNotebook,
+            metadata: s.metadata,
+          };
+        }
+      });
+      localStorage.setItem('storycast_scene_notebooks_v1', JSON.stringify(notebookMap));
+    } catch (e) {
+      // Ignore storage quota warnings
+    }
   }, [scenes]);
 
   // Recalculate timestamps helper
@@ -793,7 +950,7 @@ export default function App() {
   return (
     <div className="h-screen w-screen flex flex-col bg-[#08090e] text-zinc-100 font-sans overflow-hidden select-none">
       {/* PWA & Mobile Android Install Banner */}
-      <InstallPromptBanner appName="StoryCast AI Pro" />
+      <InstallPromptBanner appName="Storycast AI Pro" />
 
       {/* 1. Top Global Navigation Header */}
       <Header
@@ -930,7 +1087,16 @@ export default function App() {
                 setIsTurnaroundOpen(true);
               }}
               onOpenBatchAudio={() => setIsBatchAudioOpen(true)}
-              onOpenTransitions={() => setIsTransitionsOpen(true)}
+              onOpenTransitions={(sceneId) => {
+                if (sceneId) {
+                  const idx = scenes.findIndex((s) => s.id === sceneId);
+                  if (idx !== -1) setCurrentSceneIndex(idx);
+                  setTransitionTargetSceneId(sceneId);
+                } else {
+                  setTransitionTargetSceneId(scenes[currentSceneIndex]?.id);
+                }
+                setIsTransitionsOpen(true);
+              }}
               onOpenCostumeLock={() => setIsCostumeLockOpen(true)}
               onOpenBackgroundGenerator={(sceneId) => {
                 if (sceneId) {
@@ -1034,20 +1200,24 @@ export default function App() {
         }}
       />
 
-      {/* 8. Cinematic Transition FX Studio Modal */}
-      <TransitionModal
+      {/* 8. SceneTransitionLibrary Modal (12+ Artistic Transition Styles with Live Preview) */}
+      <SceneTransitionLibrary
         isOpen={isTransitionsOpen}
         onClose={() => setIsTransitionsOpen(false)}
-        selectedEffect={scenes[currentSceneIndex]?.transitionEffect || 'Dissolve'}
-        sceneCount={scenes.length}
-        onSelectEffect={(effect: TransitionEffect) => {
-          const currentId = scenes[currentSceneIndex]?.id;
-          if (currentId) {
-            handleUpdateScene(currentId, { transitionEffect: effect });
-          }
-        }}
+        scene={
+          scenes.find((s) => s.id === transitionTargetSceneId) ||
+          scenes[currentSceneIndex] ||
+          scenes[0]
+        }
+        scenes={scenes}
+        onUpdateScene={handleUpdateScene}
         onApplyToAllScenes={(effect: TransitionEffect) => {
           setScenes((prev) => prev.map((s) => ({ ...s, transitionEffect: effect })));
+        }}
+        onSelectScene={(sceneId) => {
+          setTransitionTargetSceneId(sceneId);
+          const idx = scenes.findIndex((s) => s.id === sceneId);
+          if (idx !== -1) setCurrentSceneIndex(idx);
         }}
       />
 

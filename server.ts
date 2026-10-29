@@ -1624,6 +1624,23 @@ app.post('/api/video-download', async (req: Request, res: Response) => {
   res.redirect(SAMPLE_PREVIEW_VIDEOS[0]);
 });
 
+// Explicitly serve PWA root files with proper MIME types and headers in both dev and production
+app.get('/manifest.json', (_req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'application/manifest+json');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.sendFile(path.join(__dirname, 'public', 'manifest.json'));
+});
+
+app.get('/sw.js', (_req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'application/javascript');
+  res.setHeader('Service-Worker-Allowed', '/');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.sendFile(path.join(__dirname, 'public', 'sw.js'));
+});
+
+app.use('/.well-known', express.static(path.join(__dirname, 'public', '.well-known')));
+app.use(express.static(path.join(__dirname, 'public')));
+
 // Setup Vite middleware in dev or static files in production
 async function startServer() {
   if (process.env.NODE_ENV === 'production') {

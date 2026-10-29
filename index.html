@@ -3,22 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>StoryCast AI Pro</title>
-    <meta name="description" content="Convert written stories and scripts into fully animated AI video productions with customizable voiceovers, scene timeline, and master MP4 export." />
+    <title>Storycast AI Pro</title>
+    <meta name="description" content="AI Video Production Studio" />
     
     <!-- Mobile PWA & Android / iOS Web App Meta Tags -->
-    <meta name="theme-color" content="#080a0f" />
+    <meta name="theme-color" content="#00d4ff" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="StoryCast" />
+    <meta name="apple-mobile-web-app-title" content="Storycast" />
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="icon" type="image/png" sizes="192x192" href="/pwa-192x192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/pwa-512x512.png" />
 
-    <meta property="og:title" content="StoryCast AI Pro" />
-    <meta property="og:description" content="Convert written stories and scripts into fully animated AI video productions with customizable voiceovers, scene timeline, and master MP4 export." />
+    <meta property="og:title" content="Storycast AI Pro" />
+    <meta property="og:description" content="AI Video Production Studio" />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -28,6 +28,15 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('Storycast SW registered:', reg.scope))
+            .catch(err => console.error('Storycast SW failed:', err));
+        });
+      }
+    </script>
   </body>
 </html>
 

@@ -5,7 +5,21 @@ export interface VisualTheme {
   particleType: 'rain' | 'embers' | 'sparks' | 'dust' | 'stars' | 'matrix';
 }
 
-export type TransitionEffect = 'Dissolve' | 'Fade' | 'Glitch' | 'Wipe' | 'Cinematic Wipe' | 'None';
+export type TransitionEffect =
+  | 'Dissolve'
+  | 'Fade'
+  | 'Glitch'
+  | 'VHS Glitch'
+  | 'Light Leak'
+  | 'Film Burn'
+  | 'Whip Pan'
+  | 'Iris Vignette'
+  | 'Flash Cut'
+  | 'Prism Split'
+  | 'Luma Melt'
+  | 'Wipe'
+  | 'Cinematic Wipe'
+  | 'None';
 
 export type CameraIntensity = 'Slow' | 'Moderate' | 'Dynamic' | 'Fast';
 
@@ -94,12 +108,54 @@ export interface Scene {
   keyframeAnchorPrompt?: string; // Locked keyframe anchor prompt for scene-to-scene visual consistency
   colorGradePreset?: CinematicGradePresetId; // Selected LUT color grading preset (e.g. 'Noir', 'Technicolor', 'Retro', 'Desaturated')
   colorGradeIntensity?: number; // 0 to 100 blend strength of the color grade filter (default 100)
+  directorNotebook?: DirectorNotebookData; // Persistent Production Director's Notebook (rich-text notes, lighting refs, camera focus cues)
   metadata?: SceneMetadata;
   status: 'queued' | 'rendering' | 'ready' | 'error';
   progress: number;
   generationPhase: string;
   visualTheme: VisualTheme;
   seed: number;
+}
+
+export interface LightingReferenceItem {
+  id: string;
+  label: string; // e.g. 'Key Light: Cyan Neon Tube (45° Camera Left)'
+  setupType:
+    | 'Key Light'
+    | 'Fill Light'
+    | 'Back / Rim'
+    | 'Rim / Back Light'
+    | 'Practical'
+    | 'Volumetric Haze'
+    | 'Volumetric / Haze';
+  colorTemp: string; // e.g. '5600K Cyan Gel' or '3200K Tungsten'
+  colorHex: string; // e.g. '#00f0ff'
+  ratioOrIntensity: string; // e.g. '4:1 Chiaroscuro' or '85% Softbox'
+  referenceImageUrl?: string; // optional uploaded lighting diagram or reference photo
+  notes?: string;
+}
+
+export interface CameraFocusCue {
+  id: string;
+  timestampSec: number; // timestamp within scene duration
+  targetSubject: string; // e.g. 'Leo Eyes -> Holographic Shard'
+  focalDistance: string; // e.g. '0.85m -> 2.4m'
+  cueType: 'Rack Focus' | 'Lock Focus' | 'Shallow DOF Tracking' | 'Split Diopter' | 'Deep Focus';
+  apertureMark?: string; // e.g. 'T1.5'
+  notes?: string;
+}
+
+export interface DirectorNotebookData {
+  richTextNotes: string; // Rich-text HTML production notes, blocking, and subtext
+  blockingAndSubtext?: string;
+  audioFoleyCues?: string;
+  lightingNotes?: string;
+  plainTextSummary?: string;
+  lightingSetupPreset?: string;
+  lightingReferences: LightingReferenceItem[];
+  cameraFocusCues: CameraFocusCue[];
+  blockingAndFramingTags?: string[];
+  lastUpdated?: string;
 }
 
 export type CinematicGradePresetId =
@@ -161,6 +217,7 @@ export interface SceneMetadata {
   sepia?: number; // 0 to 100 (default 0)
   hueRotate?: number; // -180 to 180 (default 0)
   colorTint?: string; // optional rgba tint wash
+  directorNotebook?: DirectorNotebookData; // Synced Production Director's Notebook
 }
 
 export interface BackgroundAsset {

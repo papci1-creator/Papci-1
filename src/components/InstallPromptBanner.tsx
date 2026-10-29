@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Smartphone, X, WifiOff, Share2, CheckCircle2 } from 'lucide-react';
+import { Download, Smartphone, X, WifiOff, Share2, CheckCircle2, Maximize2, Minimize2 } from 'lucide-react';
 
 interface BeforeInstallPromptEvent extends Event {
   readonly platforms: string[];
@@ -15,13 +15,14 @@ interface InstallPromptBannerProps {
 }
 
 export const InstallPromptBanner: React.FC<InstallPromptBannerProps> = ({
-  appName = 'StoryCast AI Pro',
+  appName = 'Storycast AI Pro',
 }) => {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isDismissed, setIsDismissed] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
   const [isAndroid, setIsAndroid] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [showInstallGuideModal, setShowInstallGuideModal] = useState(false);
   const [isOnline, setIsOnline] = useState(
     typeof navigator !== 'undefined' ? navigator.onLine : true
@@ -50,21 +51,39 @@ export const InstallPromptBanner: React.FC<InstallPromptBannerProps> = ({
       setShowInstallGuideModal(false);
     };
 
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
+  const handleToggleFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+      } else {
+        await document.exitFullscreen();
+      }
+    } catch (err) {
+      console.warn('Fullscreen toggle not permitted in this context:', err);
+    }
+  };
 
   const handleInstallClick = async () => {
     if (deferredPrompt) {
@@ -93,9 +112,9 @@ export const InstallPromptBanner: React.FC<InstallPromptBannerProps> = ({
         </div>
       )}
 
-      {/* Top In-App PWA Install Banner */}
+      {/* Top In-App PWA Install & Fullscreen Banner */}
       {!isInstalled && !isDismissed && (
-        <div className="bg-gradient-to-r from-[#0d1424] via-[#101b33] to-[#0d1424] border-b border-cyan-500/40 px-3 py-2 flex items-center justify-between text-xs animate-in slide-in-from-top duration-200 z-40 relative">
+        <div className="bg-gradient-to-r from-[#0b0f19] via-[#101b33] to-[#0b0f19] border-b border-cyan-500/40 px-3 py-2 flex items-center justify-between text-xs animate-in slide-in-from-top duration-200 z-40 relative">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-7 h-7 rounded-lg bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-300 shrink-0 shadow-[0_0_10px_rgba(0,240,255,0.3)]">
               <Smartphone className="w-4 h-4" />
@@ -108,16 +127,35 @@ export const InstallPromptBanner: React.FC<InstallPromptBannerProps> = ({
                     ? 'iOS Home Screen PWA'
                     : isAndroid
                     ? 'Android Standalone App'
-                    : 'Installable Desktop & Mobile PWA'}
+                    : 'Installable Full-Screen PWA'}
                 </span>
               </div>
               <p className="text-[11px] text-zinc-300 truncate hidden sm:block">
-                Install to your device home screen for standalone fullscreen studio playback & offline caching
+                Install to your home screen or launch full-screen standalone studio mode with offline service worker caching
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2 shrink-0 ml-2">
+            <button
+              type="button"
+              onClick={handleToggleFullscreen}
+              className="px-2.5 py-1 rounded-md bg-[#11172a] hover:bg-[#19223c] text-cyan-300 border border-cyan-500/30 text-[11px] font-mono flex items-center gap-1.5 transition-all cursor-pointer"
+              title="Toggle Full-Screen Studio View"
+            >
+              {isFullscreen ? (
+                <>
+                  <Minimize2 className="w-3.5 h-3.5" />
+                  <span className="hidden md:inline">Exit Fullscreen</span>
+                </>
+              ) : (
+                <>
+                  <Maximize2 className="w-3.5 h-3.5" />
+                  <span className="hidden md:inline">Full-Screen</span>
+                </>
+              )}
+            </button>
+
             <button
               onClick={handleInstallClick}
               className="px-3 py-1 rounded-md bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-black font-bold text-[11px] font-mono flex items-center gap-1.5 shadow-[0_0_12px_rgba(0,240,255,0.35)] transition-all cursor-pointer"
@@ -144,8 +182,8 @@ export const InstallPromptBanner: React.FC<InstallPromptBannerProps> = ({
             <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
               <div className="flex items-center gap-2.5">
                 <img
-                  src="/pwa-192x192.png"
-                  alt="StoryCast Icon"
+                  src="https://cdn-icons-png.flaticon.com/192/2503/2503508.png"
+                  alt="Storycast Icon"
                   className="w-9 h-9 rounded-xl border border-cyan-500/40"
                 />
                 <div>

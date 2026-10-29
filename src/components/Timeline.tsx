@@ -67,7 +67,7 @@ interface TimelineProps {
   characters?: CharacterProfile[];
   onOpenTurnaround?: (char: CharacterProfile) => void;
   onOpenBatchAudio?: () => void;
-  onOpenTransitions?: () => void;
+  onOpenTransitions?: (sceneId?: string) => void;
   onOpenCostumeLock?: () => void;
   onOpenBackgroundGenerator?: (sceneId?: string) => void;
   onOpenVoiceRecorder?: (sceneId?: string) => void;
@@ -133,10 +133,24 @@ export const renderTransitionIcon = (effect?: TransitionEffect, className = 'w-3
     case 'Fade':
       return <EyeOff className={`${className} text-indigo-400 shrink-0`} />;
     case 'Glitch':
+    case 'VHS Glitch':
       return <Zap className={`${className} text-rose-400 shrink-0`} />;
+    case 'Light Leak':
+      return <Sun className={`${className} text-amber-400 shrink-0`} />;
+    case 'Film Burn':
+      return <Sparkles className={`${className} text-orange-400 shrink-0`} />;
+    case 'Whip Pan':
     case 'Wipe':
     case 'Cinematic Wipe':
       return <MoveHorizontal className={`${className} text-amber-400 shrink-0`} />;
+    case 'Iris Vignette':
+      return <Aperture className={`${className} text-purple-400 shrink-0`} />;
+    case 'Flash Cut':
+      return <Zap className={`${className} text-sky-300 shrink-0`} />;
+    case 'Prism Split':
+      return <Palette className={`${className} text-emerald-400 shrink-0`} />;
+    case 'Luma Melt':
+      return <Layers className={`${className} text-fuchsia-400 shrink-0`} />;
     case 'None':
       return <Square className={`${className} text-zinc-500 shrink-0`} />;
     case 'Dissolve':
@@ -147,6 +161,94 @@ export const renderTransitionIcon = (effect?: TransitionEffect, className = 'w-3
 
 export const getTransitionVisualDetails = (effect?: TransitionEffect) => {
   switch (effect) {
+    case 'VHS Glitch':
+      return {
+        label: 'VHS Glitch',
+        subtitle: 'Analog Tape Tear',
+        desc: 'Magnetic tape tracking jitter, scanlines & CRT phosphor bleed',
+        border: 'border-rose-500/40',
+        badge: 'bg-rose-950/40 text-rose-300 border-rose-500/30 hover:border-rose-400/60',
+        activeRing: 'border-rose-400/80 bg-rose-950/60 text-rose-200',
+        previewGradient: 'from-rose-500 via-cyan-400 to-purple-600',
+        accentColor: '#f43f5e',
+      };
+    case 'Light Leak':
+      return {
+        label: 'Light Leak',
+        subtitle: 'Anamorphic Flare Wash',
+        desc: 'Warm golden-amber & cyan anamorphic lens flare wash across the cut',
+        border: 'border-amber-500/40',
+        badge: 'bg-amber-950/40 text-amber-300 border-amber-500/30 hover:border-amber-400/60',
+        activeRing: 'border-amber-400/80 bg-amber-950/60 text-amber-200',
+        previewGradient: 'from-amber-400 via-orange-500 to-yellow-200',
+        accentColor: '#f59e0b',
+      };
+    case 'Film Burn':
+      return {
+        label: 'Film Burn',
+        subtitle: '35mm Celluloid Melt',
+        desc: 'Organic 35mm photochemical emulsion blister & sprocket halation flash',
+        border: 'border-orange-500/40',
+        badge: 'bg-orange-950/40 text-orange-300 border-orange-500/30 hover:border-orange-400/60',
+        activeRing: 'border-orange-400/80 bg-orange-950/60 text-orange-200',
+        previewGradient: 'from-orange-600 via-amber-400 to-red-900',
+        accentColor: '#ea580c',
+      };
+    case 'Whip Pan':
+      return {
+        label: 'Whip Pan',
+        subtitle: 'Kinetic Motion Streak',
+        desc: 'Rapid lateral camera whip with directional motion-blur streaks',
+        border: 'border-sky-500/40',
+        badge: 'bg-sky-950/40 text-sky-300 border-sky-500/30 hover:border-sky-400/60',
+        activeRing: 'border-sky-400/80 bg-sky-950/60 text-sky-200',
+        previewGradient: 'from-sky-400 via-white to-amber-400',
+        accentColor: '#38bdf8',
+      };
+    case 'Iris Vignette':
+      return {
+        label: 'Iris Vignette',
+        subtitle: 'Noir Aperture Close',
+        desc: 'Circular mechanical iris contraction and expansion on subject center',
+        border: 'border-purple-500/40',
+        badge: 'bg-purple-950/40 text-purple-300 border-purple-500/30 hover:border-purple-400/60',
+        activeRing: 'border-purple-400/80 bg-purple-950/60 text-purple-200',
+        previewGradient: 'from-black via-purple-600 to-black',
+        accentColor: '#a855f7',
+      };
+    case 'Flash Cut':
+      return {
+        label: 'Flash Cut',
+        subtitle: 'Strobe Overexposure',
+        desc: 'High-voltage xenon white-cyan flash frame burst',
+        border: 'border-slate-400/40',
+        badge: 'bg-slate-900/60 text-slate-200 border-slate-400/30 hover:border-slate-300/60',
+        activeRing: 'border-white/80 bg-slate-800 text-white',
+        previewGradient: 'from-cyan-200 via-white to-sky-300',
+        accentColor: '#e2e8f0',
+      };
+    case 'Prism Split':
+      return {
+        label: 'Prism Split',
+        subtitle: 'Diopter Refraction',
+        desc: 'Multi-faceted optical glass prism ghosting with spectral dispersion',
+        border: 'border-emerald-500/40',
+        badge: 'bg-emerald-950/40 text-emerald-300 border-emerald-500/30 hover:border-emerald-400/60',
+        activeRing: 'border-emerald-400/80 bg-emerald-950/60 text-emerald-200',
+        previewGradient: 'from-emerald-400 via-cyan-400 to-pink-500',
+        accentColor: '#34d399',
+      };
+    case 'Luma Melt':
+      return {
+        label: 'Luma Melt',
+        subtitle: 'Highlight Threshold',
+        desc: 'Specular highlights liquefy and bleed through dark shadow contours',
+        border: 'border-fuchsia-500/40',
+        badge: 'bg-fuchsia-950/40 text-fuchsia-300 border-fuchsia-500/30 hover:border-fuchsia-400/60',
+        activeRing: 'border-fuchsia-400/80 bg-fuchsia-950/60 text-fuchsia-200',
+        previewGradient: 'from-fuchsia-500 via-purple-600 to-cyan-400',
+        accentColor: '#c084fc',
+      };
     case 'Fade':
       return {
         label: 'Fade',
@@ -816,15 +918,15 @@ export const Timeline: React.FC<TimelineProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Transition Effects Studio Modal Button */}
+          {/* SceneTransitionLibrary Modal Button */}
           {onOpenTransitions && (
             <button
-              onClick={onOpenTransitions}
+              onClick={() => onOpenTransitions(scenes[currentSceneIndex]?.id)}
               className="px-2.5 py-1 rounded-md text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/35 flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_12px_rgba(251,191,36,0.15)]"
-              title="Open Transition Effects Studio"
+              title="Open SceneTransitionLibrary (12+ Artistic Transitions with Live Preview)"
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>Transitions</span>
+              <span>Transition Library</span>
             </button>
           )}
 
@@ -1690,9 +1792,21 @@ export const Timeline: React.FC<TimelineProps> = ({
                       <Sparkles className="w-3 h-3 text-amber-400" />
                       <span>Visual Transition to Next Scene</span>
                     </span>
-                    <span className="text-[9px] font-mono text-zinc-500">
-                      Shader Blend
-                    </span>
+                    {onOpenTransitions ? (
+                      <button
+                        type="button"
+                        onClick={() => onOpenTransitions(scene.id)}
+                        className="text-[9px] font-mono text-amber-300 hover:text-amber-200 underline cursor-pointer flex items-center gap-0.5"
+                        title="Open SceneTransitionLibrary with Live Preview"
+                      >
+                        <Play className="w-2.5 h-2.5 fill-current" />
+                        <span>Library &amp; Live Preview</span>
+                      </button>
+                    ) : (
+                      <span className="text-[9px] font-mono text-zinc-500">
+                        Shader Blend
+                      </span>
+                    )}
                   </div>
 
                   {/* Dropdown Trigger Button */}

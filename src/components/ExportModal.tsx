@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Download,
   X,
@@ -24,10 +24,84 @@ import {
   Gauge,
   Clock,
   Mic,
+  Share2,
+  Smartphone,
+  Zap,
+  Scissors,
 } from 'lucide-react';
 import { Scene, AspectRatio, SoundtrackMixConfig } from '../types';
 import { exportMasterVideo, ExportProgress, ExportResult } from '../utils/exportMaster';
 import { downloadStoryboardPdf } from '../utils/storyboardPdf';
+
+interface QuickSharePlatformPreset {
+  id: 'tiktok-15' | 'reels-15' | 'reels-30' | 'shorts-30' | 'teaser-10';
+  name: string;
+  platform: string;
+  durationSecs: number;
+  aspectRatio: AspectRatio;
+  resolutionPreset: 'vertical' | '720p' | '1080p';
+  fps: number;
+  badge: string;
+  description: string;
+}
+
+const QUICK_SHARE_PRESETS: QuickSharePlatformPreset[] = [
+  {
+    id: 'tiktok-15',
+    name: 'TikTok 15s Hook',
+    platform: 'TikTok',
+    durationSecs: 15,
+    aspectRatio: '9:16',
+    resolutionPreset: 'vertical',
+    fps: 30,
+    badge: '9:16 · 15s',
+    description: 'High-retention 15s vertical cut with burned-in hook subtitles',
+  },
+  {
+    id: 'reels-15',
+    name: 'IG Reels 15s Sprint',
+    platform: 'Instagram Reels',
+    durationSecs: 15,
+    aspectRatio: '9:16',
+    resolutionPreset: 'vertical',
+    fps: 30,
+    badge: '9:16 · 15s',
+    description: 'Fast-paced 15s vertical highlight reel with auto-ducked score',
+  },
+  {
+    id: 'reels-30',
+    name: 'IG Reels 30s Story',
+    platform: 'Instagram Reels',
+    durationSecs: 30,
+    aspectRatio: '9:16',
+    resolutionPreset: 'vertical',
+    fps: 30,
+    badge: '9:16 · 30s',
+    description: 'Complete multi-scene 30s vertical story arc for Reels feed',
+  },
+  {
+    id: 'shorts-30',
+    name: 'YouTube Shorts 30s',
+    platform: 'YouTube Shorts',
+    durationSecs: 30,
+    aspectRatio: '9:16',
+    resolutionPreset: 'vertical',
+    fps: 60,
+    badge: '9:16 · 60fps',
+    description: 'Smooth 60fps vertical cut tailored for YouTube Shorts shelf',
+  },
+  {
+    id: 'teaser-10',
+    name: 'Widescreen 10s Teaser',
+    platform: 'X / Social Feed',
+    durationSecs: 10,
+    aspectRatio: '16:9',
+    resolutionPreset: '720p',
+    fps: 24,
+    badge: '16:9 · 10s',
+    description: 'Cinema 24fps widescreen trailer micro-teaser for social feeds',
+  },
+];
 
 interface ExportModalProps {
   isOpen: boolean;
@@ -52,13 +126,26 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   onOpenSoundtrackStudio,
   onOpenGmail,
 }) => {
-  const [activeTab, setActiveTab] = useState<'video' | 'pdf' | 'python'>('video');
+  const [activeTab, setActiveTab] = useState<'video' | 'quickshare' | 'pdf' | 'python'>('video');
   const [isExporting, setIsExporting] = useState(false);
   const [progressInfo, setProgressInfo] = useState<ExportProgress | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [exportResult, setExportResult] = useState<ExportResult | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiedPython, setCopiedPython] = useState(false);
+
+  // Quick Share Utility State
+  const [selectedQuickPresetId, setSelectedQuickPresetId] = useState<QuickSharePlatformPreset['id']>('tiktok-15');
+  const [quickTargetDuration, setQuickTargetDuration] = useState<number>(15);
+  const [quickAspect, setQuickAspect] = useState<AspectRatio>('9:16');
+  const [quickPacingMode, setQuickPacingMode] = useState<'proportional' | 'window' | 'montage'>('proportional');
+  const [quickStartSceneIdx, setQuickStartSceneIdx] = useState<number>(0);
+  const [quickHookCaption, setQuickHookCaption] = useState<string>('');
+  const [quickBurnSubtitles, setQuickBurnSubtitles] = useState<boolean>(true);
+  const [quickBurnHeading, setQuickBurnHeading] = useState<boolean>(true);
+  const [quickShareResult, setQuickShareResult] = useState<ExportResult | null>(null);
+  const [copiedShareCaption, setCopiedShareCaption] = useState<boolean>(false);
+  const [shareStatusMsg, setShareStatusMsg] = useState<string | null>(null);
 
   // Master Video Export Configuration State
   const [resolutionPreset, setResolutionPreset] = useState<'1080p' | '720p' | '4k' | 'vertical'>('1080p');
@@ -90,6 +177,82 @@ export const ExportModal: React.FC<ExportModalProps> = ({
       }
     }
   }, [progressInfo]);
+
+  // Compute the sliced/scaled timeline scenes for Quick Share
+  const quickShareScenes = useMemo<Scene[]>(() => {
+    if (!scenes || scenes.length === 0) return [];
+    const safeStart = Math.min(Math.max(0, quickStartSceneIdx), scenes.length - 1);
+    const sourceSlice = quickPacingMode === 'window' ? scenes.slice(safeStart) : scenes;
+
+    if (quickPacingMode === 'window') {
+      const result: Scene[] = [];
+      let accumulated = 0;
+      for (let i = 0; i < sourceSlice.length; i++) {
+        if (accumulated >= quickTargetDuration) break;
+        const sc = sourceSlice[i];
+        const remaining = Math.max(0.5, Number((quickTargetDuration - accumulated).toFixed(2)));
+        const clipDur = Math.min(sc.duration || 5, remaining);
+        const startTime = Number(accumulated.toFixed(2));
+        const endTime = Number((accumulated + clipDur).toFixed(2));
+        result.push({
+          ...sc,
+          duration: clipDur,
+          startTime,
+          endTime,
+          title: quickHookCaption.trim() && i === 0 ? `${quickHookCaption.trim()} · ${sc.title}` : sc.title,
+        });
+        accumulated = endTime;
+      }
+      // If the timeline slice is shorter than quickTargetDuration, scale the last clip or proportionally fill
+      if (result.length > 0 && accumulated < quickTargetDuration) {
+        const diff = Number((quickTargetDuration - accumulated).toFixed(2));
+        const last = result[result.length - 1];
+        last.duration = Number((last.duration + diff).toFixed(2));
+        last.endTime = Number(quickTargetDuration.toFixed(2));
+      }
+      return result;
+    }
+
+    if (quickPacingMode === 'montage') {
+      const perScene = Number((quickTargetDuration / sourceSlice.length).toFixed(2));
+      let running = 0;
+      return sourceSlice.map((sc, idx) => {
+        const isLast = idx === sourceSlice.length - 1;
+        const dur = isLast ? Math.max(0.5, Number((quickTargetDuration - running).toFixed(2))) : Math.max(0.5, perScene);
+        const startTime = Number(running.toFixed(2));
+        const endTime = Number((running + dur).toFixed(2));
+        running = endTime;
+        return {
+          ...sc,
+          duration: dur,
+          startTime,
+          endTime,
+          title: quickHookCaption.trim() && idx === 0 ? `${quickHookCaption.trim()} · ${sc.title}` : sc.title,
+        };
+      });
+    }
+
+    // Default: 'proportional' — scale all timeline scenes proportionally to hit exact target duration
+    const rawTotal = sourceSlice.reduce((acc, s) => acc + (s.duration || 5), 0) || 1;
+    const scale = quickTargetDuration / rawTotal;
+    let running = 0;
+    return sourceSlice.map((sc, idx) => {
+      const isLast = idx === sourceSlice.length - 1;
+      const scaledDur = isLast
+        ? Math.max(0.5, Number((quickTargetDuration - running).toFixed(2)))
+        : Math.max(0.5, Number(((sc.duration || 5) * scale).toFixed(2)));
+      const startTime = Number(running.toFixed(2));
+      const endTime = Number((running + scaledDur).toFixed(2));
+      running = endTime;
+      return {
+        ...sc,
+        duration: scaledDur,
+        startTime,
+        endTime,
+        title: quickHookCaption.trim() && idx === 0 ? `${quickHookCaption.trim()} · ${sc.title}` : sc.title,
+      };
+    });
+  }, [scenes, quickTargetDuration, quickPacingMode, quickStartSceneIdx, quickHookCaption]);
 
   // PDF Storyboard Generation State
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
@@ -449,6 +612,111 @@ print("\nFinal story video with synchronized voiceover generated: story_with_nar
     }
   };
 
+  const activeQuickPreset =
+    QUICK_SHARE_PRESETS.find((p) => p.id === selectedQuickPresetId) || QUICK_SHARE_PRESETS[0];
+
+  const handleSelectQuickPreset = (preset: QuickSharePlatformPreset) => {
+    setSelectedQuickPresetId(preset.id);
+    setQuickTargetDuration(preset.durationSecs);
+    setQuickAspect(preset.aspectRatio);
+    setQuickShareResult(null);
+    setShareStatusMsg(null);
+  };
+
+  const socialShareCaption = useMemo(() => {
+    const firstLine = quickShareScenes[0]?.voiceoverText || quickShareScenes[0]?.title || projectTitle;
+    const hookPrefix = quickHookCaption.trim() ? `${quickHookCaption.trim()} — ` : '';
+    return `${hookPrefix}${projectTitle} (${quickTargetDuration}s ${activeQuickPreset.platform} Cut)\n"${firstLine}"\n#StorycastAI #AIFilm #${activeQuickPreset.platform.replace(/\s+/g, '')} #CinematicShorts #Screenplay`;
+  }, [quickShareScenes, quickHookCaption, projectTitle, quickTargetDuration, activeQuickPreset]);
+
+  const handleCopyShareCaption = () => {
+    navigator.clipboard.writeText(socialShareCaption);
+    setCopiedShareCaption(true);
+    setTimeout(() => setCopiedShareCaption(false), 2000);
+  };
+
+  const handleGenerateQuickSharePreview = async () => {
+    if (quickShareScenes.length === 0) return;
+    setIsExporting(true);
+    setErrorMsg(null);
+    setQuickShareResult(null);
+    setShareStatusMsg(null);
+
+    try {
+      const result = await exportMasterVideo(
+        quickShareScenes,
+        {
+          resolutionPreset: quickAspect === '9:16' ? 'vertical' : '720p',
+          containerFormat: 'mp4',
+          aspectRatio: quickAspect,
+          frameRate: activeQuickPreset.fps,
+          bitrateMbps: 8,
+          musicStyle: soundtrackMix?.musicStyle || musicStyle,
+          musicVolume: soundtrackMix?.musicVolume ?? 0.38,
+          voiceoverVolume: soundtrackMix?.voiceoverVolume ?? 1.0,
+          ambientSfxStyle: soundtrackMix?.ambientSfxStyle ?? 'Neon Rain & Thunder',
+          ambientSfxVolume: soundtrackMix?.ambientSfxVolume ?? 0.25,
+          includeAmbientSfx: true,
+          afrobeatBpm: soundtrackMix?.afrobeatBpm ?? 108,
+          percussionIntensity: soundtrackMix?.percussionIntensity ?? 0.85,
+          logDrumBassBoost: soundtrackMix?.logDrumBassBoost ?? 0.8,
+          customAudioUrl: soundtrackMix?.customAudioUrl ?? null,
+          includeSpeech: true,
+          includeMusic: true,
+          enableAudioDucking: true,
+          burnInTimecode: false,
+          burnInSubtitles: quickBurnSubtitles,
+          burnInSceneTitle: quickBurnHeading,
+        },
+        (info: ExportProgress) => {
+          setProgressInfo(info);
+        }
+      );
+
+      const safePlatform = activeQuickPreset.platform.toLowerCase().replace(/[^a-z0-9]/g, '_');
+      setQuickShareResult({
+        ...result,
+        fileName: `Storycast_${safePlatform}_${quickTargetDuration}s_${Date.now()}.mp4`,
+      });
+    } catch (err: any) {
+      console.error('Quick Share export error:', err);
+      setErrorMsg(err?.message || 'Failed to generate Quick Share preview.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleNativeShareClip = async () => {
+    if (!quickShareResult) return;
+    setShareStatusMsg(null);
+    try {
+      const file = new File([quickShareResult.blob], quickShareResult.fileName, {
+        type: quickShareResult.mimeType || 'video/mp4',
+      });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          title: `${projectTitle} (${quickTargetDuration}s ${activeQuickPreset.platform})`,
+          text: socialShareCaption,
+          files: [file],
+        });
+        setShareStatusMsg('Shared via system share sheet.');
+        return;
+      }
+      if (navigator.share) {
+        await navigator.share({
+          title: `${projectTitle} (${quickTargetDuration}s ${activeQuickPreset.platform})`,
+          text: socialShareCaption,
+        });
+        setShareStatusMsg('Shared caption via system share sheet.');
+        return;
+      }
+    } catch (err: any) {
+      if (err?.name === 'AbortError') return;
+    }
+    navigator.clipboard.writeText(socialShareCaption);
+    setShareStatusMsg('Caption copied to clipboard — ready to paste with your downloaded clip.');
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="w-full max-w-2xl bg-[#0e121d] border border-cyan-500/40 rounded-2xl shadow-[0_0_50px_rgba(0,240,255,0.2)] overflow-hidden flex flex-col max-h-[92vh]">
@@ -480,10 +748,10 @@ print("\nFinal story video with synchronized voiceover generated: story_with_nar
         </div>
 
         {/* Tab Selection */}
-        <div className="px-6 pt-3 flex items-center gap-2 border-b border-zinc-850 bg-[#0b0e17] text-xs shrink-0">
+        <div className="px-6 pt-3 flex items-center gap-2 border-b border-zinc-850 bg-[#0b0e17] text-xs shrink-0 overflow-x-auto">
           <button
             onClick={() => setActiveTab('video')}
-            className={`pb-2.5 px-3 font-semibold flex items-center gap-1.5 transition-colors border-b-2 cursor-pointer ${
+            className={`pb-2.5 px-3 font-semibold flex items-center gap-1.5 transition-colors border-b-2 cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === 'video'
                 ? 'border-amber-400 text-amber-300'
                 : 'border-transparent text-zinc-400 hover:text-zinc-200'
@@ -493,8 +761,19 @@ print("\nFinal story video with synchronized voiceover generated: story_with_nar
             <span>Master Video (.mp4)</span>
           </button>
           <button
+            onClick={() => setActiveTab('quickshare')}
+            className={`pb-2.5 px-3 font-semibold flex items-center gap-1.5 transition-colors border-b-2 cursor-pointer whitespace-nowrap shrink-0 ${
+              activeTab === 'quickshare'
+                ? 'border-cyan-400 text-cyan-300'
+                : 'border-transparent text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <Share2 className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Quick Share (TikTok / Reels)</span>
+          </button>
+          <button
             onClick={() => setActiveTab('pdf')}
-            className={`pb-2.5 px-3 font-semibold flex items-center gap-1.5 transition-colors border-b-2 cursor-pointer ${
+            className={`pb-2.5 px-3 font-semibold flex items-center gap-1.5 transition-colors border-b-2 cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === 'pdf'
                 ? 'border-cyan-400 text-cyan-300'
                 : 'border-transparent text-zinc-400 hover:text-zinc-200'
@@ -502,13 +781,10 @@ print("\nFinal story video with synchronized voiceover generated: story_with_nar
           >
             <FileText className="w-3.5 h-3.5 text-cyan-400" />
             <span>PDF Storyboard Deck</span>
-            <span className="text-[9px] px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300 font-mono ml-0.5">
-              NEW
-            </span>
           </button>
           <button
             onClick={() => setActiveTab('python')}
-            className={`pb-2.5 px-3 font-semibold flex items-center gap-1.5 transition-colors border-b-2 cursor-pointer ${
+            className={`pb-2.5 px-3 font-semibold flex items-center gap-1.5 transition-colors border-b-2 cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === 'python'
                 ? 'border-amber-400 text-amber-300'
                 : 'border-transparent text-zinc-400 hover:text-zinc-200'
@@ -794,6 +1070,417 @@ print("\nFinal story video with synchronized voiceover generated: story_with_nar
                 </code>
               </div>
             </div>
+          ) : activeTab === 'quickshare' ? (
+            <div className="space-y-4">
+              {/* Quick Share Overview Header */}
+              <div className="bg-[#090b14] border border-cyan-500/30 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
+                    <Smartphone className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white">
+                      Quick Share Social Cut Generator
+                    </h4>
+                    <p className="text-[11px] text-zinc-400">
+                      Generate fixed-duration vertical or widescreen previews (15s TikTok, IG Reels, YouTube Shorts) directly from your project timeline.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 text-xs font-mono tabular-nums text-zinc-400 self-end sm:self-center shrink-0">
+                  <span className="text-cyan-300 font-semibold">{quickTargetDuration}s Target</span>
+                  <span aria-hidden="true">·</span>
+                  <span className="text-amber-300 font-semibold">{quickAspect}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{quickShareScenes.length} Cuts</span>
+                </div>
+              </div>
+
+              {!isExporting && !quickShareResult && (
+                <>
+                  {/* Platform Format Cards */}
+                  <div className="bg-[#090b14] border border-zinc-800 rounded-xl p-3.5 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h5 className="text-xs font-semibold text-zinc-200 flex items-center gap-1.5">
+                        <Zap className="w-3.5 h-3.5 text-amber-400" />
+                        <span>1. Choose Social Platform Preset</span>
+                      </h5>
+                      <span className="text-[11px] text-zinc-400 font-mono tabular-nums">
+                        Source Timeline: {totalDuration.toFixed(1)}s ({scenes.length} scenes)
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {QUICK_SHARE_PRESETS.map((preset) => {
+                        const isSelected = selectedQuickPresetId === preset.id;
+                        return (
+                          <button
+                            key={preset.id}
+                            onClick={() => handleSelectQuickPreset(preset)}
+                            className={`p-2.5 rounded-lg text-left transition-all border cursor-pointer ${
+                              isSelected
+                                ? 'bg-cyan-950/40 border-cyan-400 text-white'
+                                : 'bg-[#060810] border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-1 mb-1">
+                              <span className="text-xs font-bold text-cyan-300 whitespace-nowrap truncate">
+                                {preset.name}
+                              </span>
+                              <span className="text-[10px] font-mono tabular-nums text-amber-300 shrink-0">
+                                {preset.badge}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-zinc-400 line-clamp-2 leading-snug">
+                              {preset.description}
+                            </p>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Custom Duration & Pacing Controls */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2.5 border-t border-zinc-850 text-xs">
+                      <div>
+                        <label className="text-[11px] text-zinc-400 block mb-1.5 font-medium flex items-center gap-1.5">
+                          <Clock className="w-3 h-3 text-cyan-400" />
+                          <span>Exact Preview Duration</span>
+                        </label>
+                        <div className="grid grid-cols-5 gap-1 p-1 bg-[#05070c] rounded-lg border border-zinc-800">
+                          {[10, 15, 30, 45, 60].map((sec) => (
+                            <button
+                              key={sec}
+                              onClick={() => {
+                                setQuickTargetDuration(sec);
+                                setQuickShareResult(null);
+                              }}
+                              className={`py-1 rounded font-mono tabular-nums text-[11px] font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                                quickTargetDuration === sec
+                                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                                  : 'text-zinc-400 hover:text-zinc-200'
+                              }`}
+                            >
+                              {sec}s
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] text-zinc-400 block mb-1.5 font-medium flex items-center gap-1.5">
+                          <Scissors className="w-3 h-3 text-amber-400" />
+                          <span>Timeline Cut & Pacing Strategy</span>
+                        </label>
+                        <div className="grid grid-cols-3 gap-1 p-1 bg-[#05070c] rounded-lg border border-zinc-800">
+                          {[
+                            { id: 'proportional', label: 'Auto-Fit All' },
+                            { id: 'window', label: 'Window Trim' },
+                            { id: 'montage', label: 'Fast Montage' },
+                          ].map((mode) => (
+                            <button
+                              key={mode.id}
+                              onClick={() => {
+                                setQuickPacingMode(mode.id as any);
+                                setQuickShareResult(null);
+                              }}
+                              className={`py-1 px-1.5 rounded text-[11px] font-semibold transition-colors cursor-pointer whitespace-nowrap truncate ${
+                                quickPacingMode === mode.id
+                                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                                  : 'text-zinc-400 hover:text-zinc-200'
+                              }`}
+                            >
+                              {mode.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Timeline Window Start Scene + Aspect Ratio Override */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-zinc-850 text-xs">
+                      <div>
+                        <label className="text-[11px] text-zinc-400 block mb-1 font-medium">
+                          Opening Hook Text Overlay (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          value={quickHookCaption}
+                          onChange={(e) => setQuickHookCaption(e.target.value)}
+                          placeholder="e.g., POV: Five minutes before the vault breach..."
+                          className="w-full px-3 py-1.5 rounded-lg bg-[#05070c] border border-zinc-800 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-cyan-500/50"
+                        />
+                      </div>
+
+                      {quickPacingMode === 'window' ? (
+                        <div>
+                          <label className="text-[11px] text-zinc-400 block mb-1 font-medium">
+                            Start Cut From Timeline Scene
+                          </label>
+                          <select
+                            value={quickStartSceneIdx}
+                            onChange={(e) => setQuickStartSceneIdx(Number(e.target.value))}
+                            className="w-full px-3 py-1.5 rounded-lg bg-[#05070c] border border-zinc-800 text-xs text-zinc-200 focus:outline-none focus:border-cyan-500/50"
+                          >
+                            {scenes.map((sc, idx) => (
+                              <option key={sc.id || idx} value={idx}>
+                                Scene #{sc.sceneNumber}: {sc.title} ({sc.duration}s)
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="text-[11px] text-zinc-400 block mb-1 font-medium">
+                            Output Framing & Burn-Ins
+                          </label>
+                          <div className="flex items-center gap-3 pt-1">
+                            <div className="flex items-center gap-1 bg-[#05070c] p-0.5 rounded-lg border border-zinc-800">
+                              {(['9:16', '16:9'] as AspectRatio[]).map((ar) => (
+                                <button
+                                  key={ar}
+                                  onClick={() => setQuickAspect(ar)}
+                                  className={`px-2 py-1 rounded text-[10px] font-mono font-semibold cursor-pointer ${
+                                    quickAspect === ar
+                                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                                      : 'text-zinc-400 hover:text-zinc-200'
+                                  }`}
+                                >
+                                  {ar}
+                                </button>
+                              ))}
+                            </div>
+                            <label className="flex items-center gap-1.5 cursor-pointer select-none text-[11px] text-zinc-300">
+                              <input
+                                type="checkbox"
+                                checked={quickBurnSubtitles}
+                                onChange={(e) => setQuickBurnSubtitles(e.target.checked)}
+                                className="w-3.5 h-3.5 rounded border-zinc-700 bg-zinc-900 accent-cyan-500"
+                              />
+                              <span>Captions</span>
+                            </label>
+                            <label className="flex items-center gap-1.5 cursor-pointer select-none text-[11px] text-zinc-300">
+                              <input
+                                type="checkbox"
+                                checked={quickBurnHeading}
+                                onChange={(e) => setQuickBurnHeading(e.target.checked)}
+                                className="w-3.5 h-3.5 rounded border-zinc-700 bg-zinc-900 accent-cyan-500"
+                              />
+                              <span>Hook Banner</span>
+                            </label>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Interactive Timeline Cut Breakdown */}
+                  <div className="bg-[#090b14] border border-zinc-800 rounded-xl p-3.5 space-y-2.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-zinc-200 flex items-center gap-1.5">
+                        <Layers className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>2. Timeline Sequence Cut Preview ({quickTargetDuration}.0s Total)</span>
+                      </span>
+                      <span className="text-[11px] font-mono tabular-nums text-zinc-400">
+                        {quickPacingMode === 'proportional'
+                          ? 'All scenes scaled proportionally'
+                          : quickPacingMode === 'window'
+                          ? `Trimmed from Scene #${(scenes[quickStartSceneIdx]?.sceneNumber ?? 1)}`
+                          : 'Equal rhythmic montage beats'}
+                      </span>
+                    </div>
+
+                    {/* Visual Proportional Timeline Bar */}
+                    <div className="w-full h-6 rounded-lg overflow-hidden bg-[#05070c] border border-zinc-800 flex">
+                      {quickShareScenes.map((sc, idx) => {
+                        const widthPct = Math.max(5, (sc.duration / quickTargetDuration) * 100);
+                        const colors = [
+                          'bg-cyan-500/30 border-r border-cyan-500/40 text-cyan-200',
+                          'bg-amber-500/30 border-r border-amber-500/40 text-amber-200',
+                          'bg-blue-500/30 border-r border-blue-500/40 text-blue-200',
+                          'bg-emerald-500/30 border-r border-emerald-500/40 text-emerald-200',
+                        ];
+                        return (
+                          <div
+                            key={sc.id || idx}
+                            style={{ width: `${widthPct}%` }}
+                            title={`Scene #${sc.sceneNumber}: ${sc.title} (${sc.duration.toFixed(1)}s)`}
+                            className={`h-full flex items-center justify-center text-[10px] font-mono tabular-nums truncate px-1 ${colors[idx % colors.length]}`}
+                          >
+                            S{sc.sceneNumber} · {sc.duration.toFixed(1)}s
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Cut List */}
+                    <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                      {quickShareScenes.map((sc, idx) => {
+                        const origScene = scenes.find((o) => o.id === sc.id);
+                        return (
+                          <div
+                            key={sc.id || idx}
+                            className="px-3 py-2 rounded-lg bg-[#060810] border border-zinc-850 flex items-center justify-between gap-3 text-xs"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <span className="font-mono tabular-nums text-[11px] font-bold text-cyan-400 shrink-0">
+                                #{sc.sceneNumber}
+                              </span>
+                              <div className="min-w-0">
+                                <div className="font-medium text-zinc-200 truncate">{sc.title}</div>
+                                <div className="text-[10px] text-zinc-500 truncate">
+                                  {sc.voiceoverText}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 font-mono tabular-nums text-[11px] shrink-0">
+                              <span className="text-zinc-500">
+                                {(origScene?.duration ?? sc.duration).toFixed(1)}s →
+                              </span>
+                              <span className="text-amber-300 font-semibold">
+                                {sc.duration.toFixed(1)}s
+                              </span>
+                              <span className="text-zinc-500 text-[10px]">
+                                ({sc.startTime.toFixed(1)}s–{sc.endTime.toFixed(1)}s)
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Encoding Progress inside Quick Share */}
+              {isExporting && (
+                <div className="space-y-3.5 bg-[#090b14] p-4 rounded-xl border border-cyan-500/40">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-mono text-cyan-300 flex items-center gap-2">
+                      <RotateCcw className="w-3.5 h-3.5 animate-spin text-cyan-400" />
+                      <span className="font-semibold">
+                        Rendering {quickTargetDuration}s {activeQuickPreset.platform} Preview...
+                      </span>
+                    </span>
+                    <span className="font-mono tabular-nums font-bold text-amber-400 text-sm">
+                      {progressInfo?.progress || 0}%
+                    </span>
+                  </div>
+
+                  <div className="relative rounded-lg overflow-hidden border border-zinc-800 bg-black aspect-video max-h-52 flex items-center justify-center">
+                    <canvas
+                      ref={previewCanvasRef}
+                      width={quickAspect === '9:16' ? 270 : 480}
+                      height={quickAspect === '9:16' ? 480 : 270}
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+
+                  <div className="w-full h-2.5 bg-zinc-900 rounded-full overflow-hidden border border-zinc-800">
+                    <div
+                      style={{ width: `${progressInfo?.progress || 0}%` }}
+                      className="h-full bg-gradient-to-r from-cyan-400 via-amber-400 to-cyan-400 transition-all duration-200"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Completed Quick Share Result */}
+              {quickShareResult && !isExporting && (
+                <div className="bg-emerald-950/20 border border-emerald-500/40 p-4 rounded-xl space-y-3.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                        <CheckCircle2 className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-emerald-300">
+                          {quickTargetDuration}s {activeQuickPreset.platform} Cut Ready
+                        </h4>
+                        <p className="text-[11px] text-zinc-400 font-mono tabular-nums">
+                          {quickAspect} · {activeQuickPreset.fps} FPS · {(quickShareResult.sizeBytes / (1024 * 1024)).toFixed(2)} MB
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setQuickShareResult(null);
+                        setShareStatusMsg(null);
+                      }}
+                      className="px-2.5 py-1 rounded-lg text-xs font-mono text-zinc-300 hover:text-white bg-zinc-800 border border-zinc-700 cursor-pointer whitespace-nowrap shrink-0"
+                    >
+                      Adjust Duration / Format
+                    </button>
+                  </div>
+
+                  <div className="rounded-xl overflow-hidden border border-zinc-800 bg-black aspect-video max-h-64 flex items-center justify-center">
+                    <video
+                      src={quickShareResult.videoUrl}
+                      controls
+                      playsInline
+                      autoPlay
+                      loop
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+
+                  {/* Social Caption Box + Share Actions */}
+                  <div className="p-3 rounded-lg bg-[#060810] border border-zinc-800 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-zinc-400 font-medium">Auto-Generated Social Caption & Hashtags</span>
+                      <button
+                        onClick={handleCopyShareCaption}
+                        className="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-cyan-300 text-[11px] font-mono flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                      >
+                        {copiedShareCaption ? (
+                          <>
+                            <Check className="w-3 h-3 text-emerald-400" />
+                            <span>Copied Caption</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3 h-3" />
+                            <span>Copy Caption</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    <pre className="text-[11px] text-zinc-300 font-mono whitespace-pre-wrap leading-relaxed bg-black/40 p-2 rounded border border-zinc-850">
+                      {socialShareCaption}
+                    </pre>
+                  </div>
+
+                  {shareStatusMsg && (
+                    <div className="text-xs text-cyan-300 font-mono bg-cyan-950/30 border border-cyan-500/30 px-3 py-2 rounded-lg">
+                      {shareStatusMsg}
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+                    <button
+                      onClick={handleNativeShareClip}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-200 font-bold text-xs transition-colors cursor-pointer whitespace-nowrap"
+                    >
+                      <Share2 className="w-3.5 h-3.5" />
+                      <span>Quick Share to App</span>
+                    </button>
+                    <a
+                      href={quickShareResult.videoUrl}
+                      download={quickShareResult.fileName}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Download {quickTargetDuration}s MP4</span>
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              {errorMsg && (
+                <div className="bg-rose-950/20 border border-rose-500/40 p-3 rounded-xl text-xs text-rose-300 font-mono">
+                  Error: {errorMsg}
+                </div>
+              )}
+            </div>
           ) : (
             <>
               {/* Metadata Overview */}
@@ -815,6 +1502,32 @@ print("\nFinal story video with synchronized voiceover generated: story_with_nar
                   <span className="font-bold text-purple-400 truncate block">{musicStyle}</span>
                 </div>
               </div>
+
+              {/* Quick Share Fast-Track Banner inside Video Tab */}
+              {!isExporting && !downloadUrl && (
+                <div className="bg-[#090b14] border border-cyan-500/30 rounded-xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
+                      <Share2 className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-white">
+                        Need a 15s TikTok or Instagram Reels Preview?
+                      </div>
+                      <p className="text-[11px] text-zinc-400">
+                        Generate a fixed-duration 10s, 15s, or 30s vertical cut directly from your timeline.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setActiveTab('quickshare')}
+                    className="px-3 py-1.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                  >
+                    <Smartphone className="w-3.5 h-3.5" />
+                    <span>Open Quick Share</span>
+                  </button>
+                </div>
+              )}
 
               {/* VIDEO CONFIGURATION STAGE (When not currently exporting and no completed download) */}
               {!isExporting && !downloadUrl && (
@@ -1231,17 +1944,32 @@ print("\nFinal story video with synchronized voiceover generated: story_with_nar
               <button
                 onClick={handleGeneratePdf}
                 disabled={isGeneratingPdf || scenes.length === 0}
-                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-extrabold text-xs uppercase tracking-wider flex items-center gap-2 shadow-[0_0_20px_rgba(0,240,255,0.35)] transition-all cursor-pointer disabled:opacity-40"
+                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-extrabold text-xs uppercase tracking-wider flex items-center gap-2 shadow-[0_0_20px_rgba(0,240,255,0.35)] transition-all cursor-pointer disabled:opacity-40 whitespace-nowrap"
               >
                 <Download className="w-4 h-4" />
                 <span>{isGeneratingPdf ? 'Generating PDF Storyboard...' : 'Download Storyboard PDF'}</span>
               </button>
+            ) : activeTab === 'quickshare' ? (
+              !quickShareResult && (
+                <button
+                  onClick={handleGenerateQuickSharePreview}
+                  disabled={isExporting || quickShareScenes.length === 0}
+                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-extrabold text-xs uppercase tracking-wider flex items-center gap-2 shadow-[0_0_20px_rgba(0,240,255,0.35)] transition-all cursor-pointer disabled:opacity-40 whitespace-nowrap"
+                >
+                  <Zap className="w-4 h-4" />
+                  <span>
+                    {isExporting
+                      ? `Rendering ${quickTargetDuration}s Preview...`
+                      : `Generate ${quickTargetDuration}s ${activeQuickPreset.platform} Preview`}
+                  </span>
+                </button>
+              )
             ) : activeTab === 'video' ? (
               <>
                 <button
                   onClick={handleGeneratePdf}
                   disabled={isGeneratingPdf || scenes.length === 0}
-                  className="px-3.5 py-2 rounded-xl bg-[#141d33] hover:bg-[#1e2c4d] border border-cyan-500/40 text-cyan-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-40"
+                  className="px-3.5 py-2 rounded-xl bg-[#141d33] hover:bg-[#1e2c4d] border border-cyan-500/40 text-cyan-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-40 whitespace-nowrap"
                   title="Download PDF Storyboard with keyframes and scripts"
                 >
                   <FileText className="w-3.5 h-3.5" />
@@ -1252,7 +1980,7 @@ print("\nFinal story video with synchronized voiceover generated: story_with_nar
                   <button
                     onClick={handleStartExport}
                     disabled={isExporting || scenes.length === 0}
-                    className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-extrabold text-xs uppercase tracking-wider flex items-center gap-2 shadow-[0_0_20px_rgba(255,170,0,0.35)] transition-all cursor-pointer disabled:opacity-40"
+                    className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-extrabold text-xs uppercase tracking-wider flex items-center gap-2 shadow-[0_0_20px_rgba(255,170,0,0.35)] transition-all cursor-pointer disabled:opacity-40 whitespace-nowrap"
                   >
                     <Download className="w-4 h-4" />
                     <span>{isExporting ? 'Encoding Master...' : 'Start Master Export'}</span>
