@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Storycast AI Pro</title>
     <meta name="description" content="AI Video Production Studio" />
     
@@ -24,6 +24,23 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+      @media screen and (max-width: 480px) {
+        html, body {
+          max-width: 100vw;
+          overflow-x: hidden;
+          /* Scales the overall font and UI down so wide rows fit cleanly on mobile */
+          font-size: 11.5px;
+        }
+        #root {
+          width: 100%;
+          max-width: 100vw;
+          overflow-x: hidden;
+          box-sizing: border-box;
+          zoom: 0.9;
+        }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

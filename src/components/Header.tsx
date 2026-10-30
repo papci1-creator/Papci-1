@@ -91,32 +91,32 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="h-16 border-b border-cyan-950/40 bg-[#080a0f]/90 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between z-30 sticky top-0">
+    <header className="h-14 sm:h-16 border-b border-cyan-950/40 bg-[#080a0f]/90 backdrop-blur-md px-2.5 sm:px-6 flex items-center justify-between gap-2 z-30 sticky top-0 max-w-full overflow-x-hidden">
       {/* Brand & Project Info */}
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-400 via-cyan-600 to-amber-500 p-[1px] shadow-[0_0_15px_rgba(0,240,255,0.4)]">
+      <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-gradient-to-br from-cyan-400 via-cyan-600 to-amber-500 p-[1px] shadow-[0_0_15px_rgba(0,240,255,0.4)] shrink-0">
             <div className="w-full h-full bg-[#090b12] rounded-[7px] flex items-center justify-center">
-              <Clapperboard className="w-5 h-5 text-cyan-400" />
+              <Clapperboard className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-400" />
             </div>
           </div>
           <div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-extrabold text-sm tracking-wider text-white uppercase font-sans">
+            <div className="flex items-center gap-1">
+              <span className="font-extrabold text-xs sm:text-sm tracking-wider text-white uppercase font-sans whitespace-nowrap">
                 StoryCast
               </span>
-              <span className="text-[10px] uppercase font-mono font-bold px-1.5 py-0.5 rounded bg-gradient-to-r from-cyan-500/20 to-amber-500/20 text-cyan-300 border border-cyan-500/30">
+              <span className="text-[9px] sm:text-[10px] uppercase font-mono font-bold px-1 sm:px-1.5 py-0.5 rounded bg-gradient-to-r from-cyan-500/20 to-amber-500/20 text-cyan-300 border border-cyan-500/30 whitespace-nowrap">
                 AI Pro
               </span>
             </div>
-            <div className="text-[10px] text-zinc-400 font-mono flex items-center gap-2">
+            <div className="text-[9px] sm:text-[10px] text-zinc-400 font-mono flex items-center gap-1.5">
               <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span>Engine v3.4 Ready</span>
+              <span className="hidden xs:inline">Engine v3.4</span>
               {onRelaunchCanvas && (
                 <button
                   onClick={onRelaunchCanvas}
                   title="Re-launch & refresh interactive app canvas stage"
-                  className="text-cyan-400 hover:text-cyan-300 underline decoration-cyan-500/40 flex items-center gap-0.5 cursor-pointer ml-1"
+                  className="text-cyan-400 hover:text-cyan-300 underline decoration-cyan-500/40 flex items-center gap-0.5 cursor-pointer"
                 >
                   <RotateCcw className="w-2.5 h-2.5" />
                   <span>Relaunch</span>
@@ -159,7 +159,7 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Right Controls: Stats & Master Export Button */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-1 sm:gap-2.5 min-w-0">
         <div className="hidden sm:flex items-center gap-3 text-xs font-mono text-zinc-400 bg-[#0e121d] px-3 py-1.5 rounded-lg border border-zinc-800/60">
           <div className="flex items-center gap-1.5">
             <Layers className="w-3.5 h-3.5 text-cyan-400" />
@@ -186,7 +186,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onOpenSoundtrackStudio}
             title="Afrobeat & Custom Soundtrack Studio - Multi-track mixer (Voiceover, Afrobeat Score & Ambient SFX)"
-            className="px-3 py-1.5 rounded-lg bg-[#0e121d] hover:bg-amber-950/30 text-amber-300 hover:text-amber-200 border border-amber-500/40 hover:border-amber-400 text-xs font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_12px_rgba(245,158,11,0.2)]"
+            className="p-1.5 sm:px-3 sm:py-1.5 rounded-lg bg-[#0e121d] hover:bg-amber-950/30 text-amber-300 hover:text-amber-200 border border-amber-500/40 hover:border-amber-400 text-xs font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_12px_rgba(245,158,11,0.2)] shrink-0"
           >
             <Music className="w-3.5 h-3.5 text-amber-400" />
             <span className="hidden md:inline">Afrobeat & Score</span>
@@ -198,7 +198,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onOpenCostumeLock}
             title="Storyboard Continuity & Costume Locks - Keep character outfits and keyframes consistent across scenes"
-            className="px-3 py-1.5 rounded-lg bg-[#0e121d] hover:bg-emerald-950/30 text-emerald-300 hover:text-emerald-200 border border-emerald-500/40 hover:border-emerald-400 text-xs font-mono font-medium flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_12px_rgba(16,185,129,0.18)]"
+            className="p-1.5 sm:px-3 sm:py-1.5 rounded-lg bg-[#0e121d] hover:bg-emerald-950/30 text-emerald-300 hover:text-emerald-200 border border-emerald-500/40 hover:border-emerald-400 text-xs font-mono font-medium flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_12px_rgba(16,185,129,0.18)] shrink-0"
           >
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
             <span className="hidden md:inline">Costume Locks</span>
@@ -210,7 +210,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onOpenCinematicGallery}
             title="Cinematic Preset Gallery - Apply color grading LUT filters (Noir, Technicolor, Retro, Desaturated)"
-            className="px-3 py-1.5 rounded-lg bg-[#0e121d] hover:bg-fuchsia-950/30 text-fuchsia-300 hover:text-fuchsia-200 border border-fuchsia-500/40 hover:border-fuchsia-400 text-xs font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_12px_rgba(217,70,239,0.2)]"
+            className="p-1.5 sm:px-3 sm:py-1.5 rounded-lg bg-[#0e121d] hover:bg-fuchsia-950/30 text-fuchsia-300 hover:text-fuchsia-200 border border-fuchsia-500/40 hover:border-fuchsia-400 text-xs font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_12px_rgba(217,70,239,0.2)] shrink-0"
           >
             <Palette className="w-3.5 h-3.5 text-fuchsia-400" />
             <span className="hidden md:inline">Color Presets</span>
@@ -222,10 +222,10 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onOpenPosterGenerator}
             title="Generate Cinematic Movie Poster based on Story Title & Theme"
-            className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500/20 via-cyan-500/20 to-purple-500/20 hover:from-amber-500/30 hover:to-cyan-500/30 text-amber-300 hover:text-amber-200 border border-amber-500/40 hover:border-amber-400 text-xs font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_14px_rgba(245,158,11,0.25)]"
+            className="p-1.5 sm:px-3 sm:py-1.5 rounded-lg bg-gradient-to-r from-amber-500/20 via-cyan-500/20 to-purple-500/20 hover:from-amber-500/30 hover:to-cyan-500/30 text-amber-300 hover:text-amber-200 border border-amber-500/40 hover:border-amber-400 text-xs font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_14px_rgba(245,158,11,0.25)] shrink-0"
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-            <span>Generate Poster</span>
+            <span className="hidden sm:inline">Generate Poster</span>
           </button>
         )}
 
@@ -234,7 +234,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onOpenBackgroundGenerator}
             title="AI Background Studio - Generate Custom Scene Environments"
-            className="px-3 py-1.5 rounded-lg bg-[#0e121d] hover:bg-cyan-950/30 text-cyan-300 hover:text-cyan-200 border border-zinc-800 hover:border-cyan-500/40 text-xs font-mono font-medium flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_12px_rgba(0,240,255,0.15)]"
+            className="p-1.5 sm:px-3 sm:py-1.5 rounded-lg bg-[#0e121d] hover:bg-cyan-950/30 text-cyan-300 hover:text-cyan-200 border border-zinc-800 hover:border-cyan-500/40 text-xs font-mono font-medium flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_12px_rgba(0,240,255,0.15)] shrink-0"
           >
             <ImageIcon className="w-3.5 h-3.5 text-cyan-400" />
             <span className="hidden md:inline">Backgrounds</span>
@@ -246,7 +246,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onOpenVoiceRecorder}
             title="Voice Recorder Studio - Record microphone audio for scenes"
-            className="px-3 py-1.5 rounded-lg bg-[#0e121d] hover:bg-rose-950/30 text-rose-300 hover:text-rose-200 border border-zinc-800 hover:border-rose-500/40 text-xs font-mono font-medium flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_12px_rgba(244,63,94,0.15)]"
+            className="p-1.5 sm:px-3 sm:py-1.5 rounded-lg bg-[#0e121d] hover:bg-rose-950/30 text-rose-300 hover:text-rose-200 border border-zinc-800 hover:border-rose-500/40 text-xs font-mono font-medium flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_12px_rgba(244,63,94,0.15)] shrink-0"
           >
             <Mic className="w-3.5 h-3.5 text-rose-400" />
             <span className="hidden md:inline">Voice Studio</span>
@@ -258,7 +258,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onOpenGoogleForms}
             title="Google Forms - Audience Screening & Feedback"
-            className="px-3 py-1.5 rounded-lg bg-[#0e121d] hover:bg-purple-950/30 text-purple-300 hover:text-purple-200 border border-zinc-800 hover:border-purple-500/40 text-xs font-mono font-medium flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_12px_rgba(168,85,247,0.15)]"
+            className="hidden sm:flex p-1.5 sm:px-3 sm:py-1.5 rounded-lg bg-[#0e121d] hover:bg-purple-950/30 text-purple-300 hover:text-purple-200 border border-zinc-800 hover:border-purple-500/40 text-xs font-mono font-medium items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_12px_rgba(168,85,247,0.15)] shrink-0"
           >
             <FileText className="w-3.5 h-3.5 text-purple-400" />
             <span className="hidden md:inline">Google Forms</span>
@@ -270,7 +270,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onOpenGmail}
             title="Gmail - Send Storyboard Pitches & Wardrobe Continuity"
-            className="px-3 py-1.5 rounded-lg bg-[#0e121d] hover:bg-red-950/30 text-red-300 hover:text-red-200 border border-zinc-800 hover:border-red-500/40 text-xs font-mono font-medium flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_12px_rgba(239,68,68,0.15)]"
+            className="hidden sm:flex p-1.5 sm:px-3 sm:py-1.5 rounded-lg bg-[#0e121d] hover:bg-red-950/30 text-red-300 hover:text-red-200 border border-zinc-800 hover:border-red-500/40 text-xs font-mono font-medium items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_12px_rgba(239,68,68,0.15)] shrink-0"
           >
             <Mail className="w-3.5 h-3.5 text-red-400" />
             <span className="hidden md:inline">Gmail</span>
@@ -282,28 +282,28 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onOpenSettings}
             title="API Keys & Environment Settings"
-            className="p-2 rounded-lg bg-[#0e121d] hover:bg-[#151c2e] text-zinc-400 hover:text-cyan-300 border border-zinc-800 hover:border-cyan-500/40 transition-all cursor-pointer"
+            className="p-1.5 sm:p-2 rounded-lg bg-[#0e121d] hover:bg-[#151c2e] text-zinc-400 hover:text-cyan-300 border border-zinc-800 hover:border-cyan-500/40 transition-all cursor-pointer shrink-0"
           >
-            <Settings className="w-4 h-4" />
+            <Settings className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </button>
         )}
 
         {/* Google Sign-In & User Account */}
         {currentUser ? (
-          <div className="relative" ref={userMenuRef}>
+          <div className="relative shrink-0" ref={userMenuRef}>
             <button
               onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-              className="flex items-center gap-2 p-1 pl-1.5 rounded-lg bg-[#0e121d] hover:bg-[#141b2c] border border-zinc-800 hover:border-cyan-500/40 text-xs transition-all cursor-pointer shadow-[0_0_10px_rgba(0,0,0,0.5)]"
+              className="flex items-center gap-1.5 p-1 pl-1.5 rounded-lg bg-[#0e121d] hover:bg-[#141b2c] border border-zinc-800 hover:border-cyan-500/40 text-xs transition-all cursor-pointer shadow-[0_0_10px_rgba(0,0,0,0.5)]"
               title={currentUser.email || 'Google Account'}
             >
               {currentUser.photoURL ? (
                 <img
                   src={currentUser.photoURL}
                   alt={currentUser.displayName || 'Google Profile'}
-                  className="w-6 h-6 rounded-full object-cover border border-cyan-500/40"
+                  className="w-5 h-5 sm:w-6 sm:h-6 rounded-full object-cover border border-cyan-500/40"
                 />
               ) : (
-                <div className="w-6 h-6 rounded-full bg-cyan-950/80 border border-cyan-500/50 text-[11px] font-bold text-cyan-300 flex items-center justify-center">
+                <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-cyan-950/80 border border-cyan-500/50 text-[10px] sm:text-[11px] font-bold text-cyan-300 flex items-center justify-center">
                   {(currentUser.displayName || currentUser.email || 'G')[0].toUpperCase()}
                 </div>
               )}
@@ -378,7 +378,7 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={onSignInGoogle}
             disabled={isAuthLoading}
             title="Sign in with your Google Account"
-            className="h-8 px-2.5 rounded-lg bg-white hover:bg-zinc-100 text-zinc-800 font-medium text-xs flex items-center gap-1.5 border border-zinc-300 shadow-sm transition-all cursor-pointer active:scale-95 disabled:opacity-50 shrink-0"
+            className="h-7 sm:h-8 px-2 sm:px-2.5 rounded-lg bg-white hover:bg-zinc-100 text-zinc-800 font-medium text-xs flex items-center gap-1.5 border border-zinc-300 shadow-sm transition-all cursor-pointer active:scale-95 disabled:opacity-50 shrink-0"
           >
             {isAuthLoading ? (
               <RotateCcw className="w-3.5 h-3.5 animate-spin text-zinc-600" />
@@ -401,10 +401,11 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           onClick={onExportClick}
           disabled={sceneCount === 0 || isGenerating}
-          className="relative group px-4 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-[0_0_20px_rgba(255,170,0,0.35)] transition-all transform active:scale-95 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+          className="relative group px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-bold text-[11px] sm:text-xs uppercase tracking-wider flex items-center gap-1.5 sm:gap-2 shadow-[0_0_20px_rgba(255,170,0,0.35)] transition-all transform active:scale-95 disabled:opacity-40 disabled:pointer-events-none cursor-pointer shrink-0 whitespace-nowrap"
         >
-          <Download className="w-4 h-4 text-black group-hover:animate-bounce" />
-          <span>Export Master MP4</span>
+          <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-black group-hover:animate-bounce" />
+          <span className="hidden sm:inline">Export Master MP4</span>
+          <span className="sm:hidden">Export</span>
         </button>
       </div>
     </header>
